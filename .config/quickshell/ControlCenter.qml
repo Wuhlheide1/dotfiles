@@ -78,12 +78,21 @@ Item {
     property int mem: 0
     property int lastTotal: 0
     property int lastIdle: 0
+    // AMD GPU via kernel sysfs (globbed: card/hwmon numbering drifts across boots)
+    property int gpu: 0
+    property int gpuTemp: 0
+    property int vramPct: 0
+    property string vramText: ""
 
     Process {
         id: sysProc
         command: ["sh", "-c",
             "awk 'NR==1{print \"cpu\", $2, $3, $4, $5, $6, $7, $8}' /proc/stat; " +
-            "awk '/MemTotal/{t=$2} /MemAvailable/{a=$2} END{printf \"mem %d\\n\", (t-a)*100/t}' /proc/meminfo"]
+            "awk '/MemTotal/{t=$2} /MemAvailable/{a=$2} END{printf \"mem %d\\n\", (t-a)*100/t}' /proc/meminfo; " +
+            "printf 'gpu %s ' \"$(cat /sys/class/drm/card*/device/gpu_busy_percent 2>/dev/null | head -1)\"; " +
+            "printf '%s ' \"$(cat /sys/class/drm/card*/device/hwmon/hwmon*/temp1_input 2>/dev/null | head -1)\"; " +
+            "printf '%s ' \"$(cat /sys/class/drm/card*/device/mem_info_vram_used 2>/dev/null | head -1)\"; " +
+            "printf '%s\\n' \"$(cat /sys/class/drm/card*/device/mem_info_vram_total 2>/dev/null | head -1)\""]
         stdout: SplitParser {
             onRead: line => {
                 if (!line) return
@@ -98,6 +107,14 @@ Item {
                     root.lastIdle = idle
                 } else if (p[0] === "mem") {
                     root.mem = parseInt(p[1])
+                } else if (p[0] === "gpu" && p.length >= 5) {
+                    root.gpu = parseInt(p[1]) || 0
+                    root.gpuTemp = Math.round((parseInt(p[2]) || 0) / 1000)
+                    var used = parseInt(p[3]) || 0
+                    var total2 = parseInt(p[4]) || 1
+                    root.vramPct = Math.round(100 * used / total2)
+                    root.vramText = (used / 1073741824).toFixed(1) + " / "
+                                  + (total2 / 1073741824).toFixed(1) + " GiB"
                 }
             }
         }
@@ -269,6 +286,14 @@ Item {
                     spacing: 8
                     StatBar { label: "CPU"; value: root.cpu; barColor: Colors.primary }
                     StatBar { label: "RAM"; value: root.mem; barColor: Colors.secondary }
+                    StatBar { label: "GPU"; value: root.gpu; barColor: Colors.tertiary }
+                    StatBar { label: "VRAM"; value: root.vramPct; barColor: Colors.tertiary }
+                    Text {
+                        Layout.alignment: Qt.AlignRight
+                        text: root.gpuTemp + "°C · " + root.vramText
+                        color: Colors.outline
+                        font { family: root.fontFamily; pixelSize: root.fontSize - 3 }
+                    }
                 }
 
                 Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Colors.outline_variant; opacity: 0.4 }
