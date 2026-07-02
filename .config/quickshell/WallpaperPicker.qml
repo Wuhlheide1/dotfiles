@@ -25,7 +25,7 @@ PanelWindow {
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: "quickshell:wallpaper"
 
-    signal closed()
+    signal dismissed()
 
     // --- config -----------------------------------------------------------
     property string wallDir: "/home/wuhlheide/images/wallpapers"
@@ -45,7 +45,7 @@ PanelWindow {
     // (the LazyLoader destroys this component), aborting awww/matugen mid-run.
     function apply(path) {
         Quickshell.execDetached(["sh", "-c", setCmd(path)]);
-        picker.closed();
+        picker.dismissed();
     }
 
     Component.onCompleted: grid.forceActiveFocus()
@@ -63,7 +63,7 @@ PanelWindow {
         anchors.fill: parent
         color: Colors.shadow
         opacity: 0.35
-        MouseArea { anchors.fill: parent; onClicked: picker.closed() }
+        MouseArea { anchors.fill: parent; onClicked: picker.dismissed() }
     }
 
     Rectangle {
@@ -99,7 +99,7 @@ PanelWindow {
                 cellWidth: width / 3
                 cellHeight: cellWidth * 0.6
 
-                Keys.onEscapePressed: picker.closed()
+                Keys.onEscapePressed: picker.dismissed()
                 Keys.onReturnPressed: if (currentItem) picker.apply(currentItem.filePath)
                 Keys.onEnterPressed:  if (currentItem) picker.apply(currentItem.filePath)
 

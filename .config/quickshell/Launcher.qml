@@ -28,7 +28,7 @@ PanelWindow {
     WlrLayershell.namespace: "quickshell:launcher"
 
     // Emitted when the user dismisses or picks something. The loader listens.
-    signal closed()
+    signal dismissed()
 
     // --- data -------------------------------------------------------------
     property string query: ""
@@ -99,7 +99,7 @@ PanelWindow {
         freqMap[entry.id] = (freqMap[entry.id] || 0) + 1;
         freqFile.setText(JSON.stringify(freqMap));
         entry.execute();      // launches the .desktop entry
-        launcher.closed();
+        launcher.dismissed();
     }
 
     Component.onCompleted: {
@@ -115,7 +115,7 @@ PanelWindow {
         opacity: 0.35
         MouseArea {
             anchors.fill: parent
-            onClicked: launcher.closed()
+            onClicked: launcher.dismissed()
         }
     }
 
@@ -166,7 +166,7 @@ PanelWindow {
                     }
 
                     // Keyboard navigation
-                    Keys.onEscapePressed: launcher.closed()
+                    Keys.onEscapePressed: launcher.dismissed()
                     Keys.onDownPressed:  launcher.setSelected(launcher.selected + 1)
                     Keys.onUpPressed:    launcher.setSelected(launcher.selected - 1)
                     Keys.onReturnPressed: launcher.run(launcher.results[launcher.selected])

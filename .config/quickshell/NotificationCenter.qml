@@ -222,17 +222,24 @@ Item {
                     Item { Layout.fillWidth: true }
 
                     // Do Not Disturb toggle (bell-slash; highlighted when active)
-                    RowLayout {
-                        spacing: 5
-                        Text {
-                            text: "\uf1f6" // nf-fa-bell-slash
-                            color: root.dnd ? Colors.primary : Colors.outline
-                            font { family: root.fontFamily; pixelSize: 13 }
-                        }
-                        Text {
-                            text: "DND"
-                            color: root.dnd ? Colors.primary : Colors.outline
-                            font { family: root.fontFamily; pixelSize: 12; bold: root.dnd }
+                    Item {
+                        implicitWidth: dndRow.implicitWidth
+                        implicitHeight: dndRow.implicitHeight
+                        Row {
+                            id: dndRow
+                            spacing: 5
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "\uf1f6" // nf-fa-bell-slash
+                                color: root.dnd ? Colors.primary : Colors.outline
+                                font { family: root.fontFamily; pixelSize: 13 }
+                            }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "DND"
+                                color: root.dnd ? Colors.primary : Colors.outline
+                                font { family: root.fontFamily; pixelSize: 12; bold: root.dnd }
+                            }
                         }
                         MouseArea {
                             anchors.fill: parent

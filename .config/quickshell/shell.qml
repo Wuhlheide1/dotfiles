@@ -25,7 +25,7 @@ PanelWindow {
     LazyLoader {
         id: launcherLoader
         // built only when active; destroyed when inactive
-        Launcher { onClosed: launcherLoader.active = false }
+        Launcher { onDismissed: launcherLoader.active = false }
     }
 
     IpcHandler {
@@ -36,7 +36,7 @@ PanelWindow {
 
     LazyLoader {
         id: wallpaperLoader
-        WallpaperPicker { onClosed: wallpaperLoader.active = false }
+        WallpaperPicker { onDismissed: wallpaperLoader.active = false }
     }
 
     IpcHandler {
@@ -47,7 +47,7 @@ PanelWindow {
 
     LazyLoader {
         id: clipboardLoader
-        ClipboardPicker { onClosed: clipboardLoader.active = false }
+        ClipboardPicker { onDismissed: clipboardLoader.active = false }
     }
 
     IpcHandler {

@@ -23,7 +23,7 @@ PanelWindow {
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: "quickshell:clipboard"
 
-    signal closed()
+    signal dismissed()
 
     property string query: ""
 
@@ -74,7 +74,7 @@ PanelWindow {
         // decode reads the id and re-copies the original bytes (text or image).
         decodeProc.command = ["sh", "-c", "cliphist decode " + entry.cid + " | wl-copy"]
         decodeProc.running = true
-        picker.closed()
+        picker.dismissed()
     }
 
     Component.onCompleted: { refresh(); input.forceActiveFocus() }
@@ -84,7 +84,7 @@ PanelWindow {
         anchors.fill: parent
         color: Colors.shadow
         opacity: 0.35
-        MouseArea { anchors.fill: parent; onClicked: picker.closed() }
+        MouseArea { anchors.fill: parent; onClicked: picker.dismissed() }
     }
 
     Rectangle {
@@ -133,7 +133,7 @@ PanelWindow {
                             visible: input.text.length === 0
                         }
 
-                        Keys.onEscapePressed: picker.closed()
+                        Keys.onEscapePressed: picker.dismissed()
                         Keys.onDownPressed:  picker.setSelected(picker.selected + 1)
                         Keys.onUpPressed:    picker.setSelected(picker.selected - 1)
                         Keys.onReturnPressed: picker.pick(picker.results[picker.selected])
