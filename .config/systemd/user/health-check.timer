@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the silent-failure watchdog daily
+
+[Timer]
+# after the nightly 00:06 backup window, so a healthy morning is a quiet one
+OnCalendar=*-*-* 09:00
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

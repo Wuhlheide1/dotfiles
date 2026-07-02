@@ -1,0 +1,6 @@
+[Unit]
+Description=Silent-failure watchdog (snapper, restic, failed units)
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/health-check

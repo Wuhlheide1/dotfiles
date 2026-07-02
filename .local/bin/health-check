@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Daily silent-failure watchdog. Checks the safety nets that fail quietly and
+# sends ONE notification only if something is actually wrong. No output = healthy.
+set -uo pipefail
+
+problems=()
+
+# 1. snapper: both configs should have a snapshot younger than 25h
+for cfg in root home; do
+    last="$(snapper -c "$cfg" list --columns date 2>/dev/null | tail -1)"
+    if [ -z "$last" ] || ! ts="$(date -d "$last" +%s 2>/dev/null)"; then
+        problems+=("snapper '$cfg': no snapshots at all")
+    elif [ $(( $(date +%s) - ts )) -gt $(( 25 * 3600 )) ]; then
+        problems+=("snapper '$cfg': newest snapshot older than 25h")
+    fi
+done
+
+# 2. restic: newest backup should be younger than 26h (skip if drive unmounted)
+if mountpoint -q /mnt/shared; then
+    export RESTIC_REPOSITORY=/mnt/shared/backups/restic
+    export RESTIC_PASSWORD_FILE="$HOME/.config/restic/password"
+    newest="$(restic snapshots --json 2>/dev/null \
+              | grep -o '"time":"[^"]*"' | tail -1 | cut -d'"' -f4)"
+    if [ -z "$newest" ]; then
+        problems+=("restic: could not read any snapshots")
+    elif [ $(( $(date +%s) - $(date -d "$newest" +%s) )) -gt $(( 26 * 3600 )) ]; then
+        problems+=("restic: newest backup older than 26h")
+    fi
+else
+    problems+=("backup drive /mnt/shared is not mounted")
+fi
+
+# 3. failed systemd units (system + user)
+sys_failed="$(systemctl --failed --no-legend --plain 2>/dev/null | awk '{print $1}')"
+usr_failed="$(systemctl --user --failed --no-legend --plain 2>/dev/null | awk '{print $1}')"
+[ -n "$sys_failed" ] && problems+=("failed system units: $(tr '\n' ' ' <<<"$sys_failed")")
+[ -n "$usr_failed" ] && problems+=("failed user units: $(tr '\n' ' ' <<<"$usr_failed")")
+
+if [ ${#problems[@]} -gt 0 ]; then
+    printf '%s\n' "${problems[@]}"
+    notify-send -u critical "System health" "$(printf '%s\n' "${problems[@]}")" 2>/dev/null || true
+    exit 1
+fi
