@@ -1,0 +1,21 @@
+# Paths restic skips when backing up /home/wuhlheide
+# One pattern per line. Edit freely — next backup picks it up automatically.
+
+# Caches & temp (regenerated automatically)
+/home/wuhlheide/.cache
+/home/wuhlheide/.local/share/Trash
+/home/wuhlheide/.local/state
+**/.thumbnails
+**/Cache
+**/CachedData
+**/GPUCache
+
+# Re-downloadable game data (saves are elsewhere and ARE backed up)
+/home/wuhlheide/.local/share/Steam/steamapps
+/home/wuhlheide/.local/share/Steam/ubuntu12_*
+
+# AUR build directory (just cloned sources)
+/home/wuhlheide/paru
+
+# The backup drive itself and other mounts
+/mnt

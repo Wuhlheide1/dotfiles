@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily restic backup of home to Shared Storage
+# Don't start if the backup drive isn't mounted
+ConditionPathIsMountPoint=/mnt/shared
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/backup run
+# Backups are not urgent — don't steal resources from whatever you're doing
+Nice=19
+IOSchedulingClass=idle

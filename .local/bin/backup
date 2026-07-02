@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Simple wrapper around restic so backups are one word.
+#
+#   backup              run a backup now (then prune old ones)
+#   backup list         show all backup snapshots
+#   backup files [ID]   list files inside a snapshot (default: latest)
+#   backup restore <ID> restore a snapshot to ~/restored/ (safe: never overwrites live files)
+#   backup check        verify repository integrity
+set -euo pipefail
+
+export RESTIC_REPOSITORY=/mnt/shared/backups/restic
+export RESTIC_PASSWORD_FILE="$HOME/.config/restic/password"
+
+if ! mountpoint -q /mnt/shared; then
+    echo "ERROR: /mnt/shared is not mounted — is the Shared Storage drive connected?" >&2
+    exit 1
+fi
+
+cmd="${1:-run}"
+case "$cmd" in
+run)
+    restic backup "$HOME" --exclude-file="$HOME/.config/restic/excludes.txt" --tag auto
+    # keep: everything from the last 7 days, one per week for a month, one per month for half a year
+    restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
+    notify-send "Backup complete" "restic snapshot saved to Shared Storage" 2>/dev/null || true
+    ;;
+list)
+    restic snapshots
+    ;;
+files)
+    restic ls "${2:-latest}"
+    ;;
+restore)
+    id="${2:?usage: backup restore <snapshot-id>  (get IDs from 'backup list')}"
+    mkdir -p "$HOME/restored"
+    restic restore "$id" --target "$HOME/restored"
+    echo
+    echo "Restored into ~/restored/ — copy what you need back manually."
+    ;;
+check)
+    restic check
+    ;;
+*)
+    # anything else is passed straight to restic, e.g. `backup diff ID1 ID2`
+    restic "$cmd" "${@:2}"
+    ;;
+esac

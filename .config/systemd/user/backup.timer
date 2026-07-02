@@ -1,0 +1,11 @@
+[Unit]
+Description=Run restic backup daily
+
+[Timer]
+OnCalendar=daily
+# If the PC was off at the scheduled time, run on next boot instead of skipping
+Persistent=true
+RandomizedDelaySec=15min
+
+[Install]
+WantedBy=timers.target
