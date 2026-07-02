@@ -56,6 +56,18 @@ PanelWindow {
         function open():   void { clipboardLoader.active = true }
     }
 
+    // Keybind cheatsheet (SUPER+K) — generated live from keybinds.lua.
+    LazyLoader {
+        id: cheatsheetLoader
+        Cheatsheet { onDismissed: cheatsheetLoader.active = false }
+    }
+
+    IpcHandler {
+        target: "cheatsheet"
+        function toggle(): void { cheatsheetLoader.active = !cheatsheetLoader.active }
+        function open():   void { cheatsheetLoader.active = true }
+    }
+
     // Brightness (software gamma via hyprsunset) — driven by the XF86MonBrightness keys.
     IpcHandler {
         target: "brightness"
