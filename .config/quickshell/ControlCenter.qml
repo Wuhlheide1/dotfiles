@@ -73,6 +73,113 @@ Item {
         onTriggered: netProc.running = true
     }
 
+    // --- Wi-Fi via iwd (scripts/wifi.sh) — section hides itself until a
+    // backend + wireless device exist, so this is inert pre-install ---
+    readonly property string wifiScript: "/home/wuhlheide/.config/quickshell/scripts/wifi.sh"
+    property string wifiState: "nobackend"   // nobackend | nodev | off | on | connected
+    property string wifiDev: ""
+    property string wifiSsid: ""
+    property var wifiNets: []                // { conn, ssid, sec, bars }
+    property var wifiKnown: []
+    property string wifiExpanded: ""         // ssid with the password field open
+    property string wifiBusy: ""             // ssid currently connecting
+    property string wifiError: ""            // ssid whose last connect failed
+    property string wifiAttempt: ""
+    readonly property bool wifiUsable: wifiState === "on" || wifiState === "connected"
+
+    function wifiConnect(ssid, pw) {
+        wifiError = ""
+        wifiAttempt = ssid
+        wifiBusy = ssid
+        // env timestamp so identical retries still re-run the Process
+        var cmd = ["env", "T=" + Date.now(), "bash", wifiScript, "connect", ssid]
+        if (pw && pw.length > 0) cmd.push(pw)
+        wifiConnectProc.command = cmd
+        wifiConnectProc.running = true
+    }
+
+    Process {
+        id: wifiStatusProc
+        command: ["bash", root.wifiScript, "status"]
+        stdout: SplitParser {
+            onRead: line => {
+                var p = line.trim().split(/\s+/)
+                if (p.length === 0 || p[0] === "") return
+                root.wifiState = p[0]
+                root.wifiDev = p[1] || ""
+                root.wifiSsid = p.slice(2).join(" ")
+            }
+        }
+    }
+    Process {
+        id: wifiListProc
+        command: ["bash", root.wifiScript, "list"]
+        property var acc: []
+        stdout: SplitParser {
+            onRead: line => {
+                var p = line.split("\t")
+                if (p.length === 4)
+                    wifiListProc.acc.push({ conn: p[0] === "1", ssid: p[1],
+                                            sec: p[2], bars: parseInt(p[3]) || 0 })
+            }
+        }
+        onExited: {
+            acc.sort((a, b) => (b.conn - a.conn) || (b.bars - a.bars))
+            root.wifiNets = acc.slice(0, 6)
+        }
+    }
+    Process {
+        id: wifiKnownProc
+        command: ["bash", root.wifiScript, "known"]
+        property var acc: []
+        stdout: SplitParser {
+            onRead: line => { if (line.trim() !== "") wifiKnownProc.acc.push(line.trim()) }
+        }
+        onExited: root.wifiKnown = acc
+    }
+    Process {
+        id: wifiConnectProc
+        onExited: (code) => {
+            root.wifiBusy = ""
+            if (code !== 0) {
+                root.wifiError = root.wifiAttempt
+                root.wifiExpanded = root.wifiAttempt   // keep the field open to retry
+            } else {
+                root.wifiError = ""
+                root.wifiExpanded = ""
+            }
+            wifiStatusProc.running = true
+            wifiListProc.acc = []; wifiListProc.running = true
+            wifiKnownProc.acc = []; wifiKnownProc.running = true
+        }
+    }
+    Timer {
+        interval: 3000; repeat: true; triggeredOnStart: true
+        running: centerPopup.visible
+        onTriggered: {
+            wifiStatusProc.running = true
+            if (root.wifiUsable) { wifiListProc.acc = []; wifiListProc.running = true }
+        }
+    }
+    Timer {
+        interval: 15000; repeat: true; triggeredOnStart: true
+        running: centerPopup.visible && root.wifiUsable
+        onTriggered: {
+            Quickshell.execDetached(["bash", root.wifiScript, "scan"])
+            wifiKnownProc.acc = []; wifiKnownProc.running = true
+        }
+    }
+    // reset transient UI state whenever the menu closes
+    Connections {
+        target: centerPopup
+        function onVisibleChanged() {
+            if (!centerPopup.visible) {
+                root.wifiExpanded = ""
+                root.wifiError = ""
+            }
+        }
+    }
+
     // --- system usage (polled only while the menu is open) ---
     property int cpu: 0
     property int mem: 0
@@ -246,7 +353,10 @@ Item {
         screen: root.barWindow ? root.barWindow.screen : null
         anchors { top: true; left: true; right: true; bottom: true }
         WlrLayershell.layer: WlrLayer.Overlay
-        WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+        // Normally the menu never takes keys; while a Wi-Fi password field is
+        // open it must, or the TextInput would be dead (overlay-popup pattern).
+        WlrLayershell.keyboardFocus: root.wifiExpanded !== ""
+            ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
         // click anywhere outside the card → close
         MouseArea { anchors.fill: parent; onClicked: PopupBus.close() }
@@ -473,7 +583,7 @@ Item {
                     visible: root.mprisPlayer !== null
                 }
 
-                // --- Network (wired; Wi-Fi picker arrives with the laptop migration) ---
+                // --- Network: wired readout ---
                 RowLayout {
                     Layout.fillWidth: true
                     Text {
@@ -498,6 +608,179 @@ Item {
                         }
                     }
                     Item { Layout.fillWidth: true }
+                }
+
+                // --- Wi-Fi (iwd) \u2014 invisible until a backend + device exist ---
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: root.wifiState !== "nobackend" && root.wifiState !== "nodev"
+                    Text {
+                        text: "\uf1eb" // nf-fa-wifi
+                        color: root.wifiState === "connected" ? Colors.primary : Colors.outline
+                        font { family: root.fontFamily; pixelSize: root.fontSize }
+                    }
+                    ColumnLayout {
+                        Layout.leftMargin: 6
+                        spacing: 0
+                        Text {
+                            text: "Wi-Fi"
+                            color: Colors.on_surface
+                            font { family: root.fontFamily; pixelSize: root.fontSize }
+                        }
+                        Text {
+                            visible: root.wifiState === "connected"
+                            text: root.wifiSsid
+                            color: Colors.on_surface_variant
+                            font { family: root.fontFamily; pixelSize: root.fontSize - 3 }
+                        }
+                    }
+                    Item { Layout.fillWidth: true }
+                    Toggle {
+                        on: root.wifiUsable
+                        onToggled: Quickshell.execDetached(
+                            ["bash", root.wifiScript, "power", root.wifiUsable ? "off" : "on"])
+                    }
+                }
+
+                // available networks (top 6 by signal, connected first)
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 24
+                    spacing: 2
+                    visible: root.wifiUsable && root.wifiNets.length > 0
+
+                    Repeater {
+                        model: root.wifiNets
+
+                        ColumnLayout {
+                            id: netEntry
+                            required property var modelData
+                            Layout.fillWidth: true
+                            spacing: 2
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                implicitHeight: 26
+                                radius: 6
+                                color: netArea.containsMouse ? Colors.surface_container_high : "transparent"
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 6
+                                    anchors.rightMargin: 6
+                                    spacing: 8
+                                    Text {
+                                        text: ["____", "\u2582___", "\u2582\u2584__",
+                                               "\u2582\u2584\u2586_", "\u2582\u2584\u2586\u2588"]
+                                              [Math.max(0, Math.min(4, netEntry.modelData.bars))]
+                                        color: Colors.on_surface_variant
+                                        font { family: root.fontFamily; pixelSize: root.fontSize - 4 }
+                                    }
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: netEntry.modelData.ssid
+                                        elide: Text.ElideRight
+                                        color: netEntry.modelData.conn ? Colors.primary : Colors.on_surface
+                                        font { family: root.fontFamily; pixelSize: root.fontSize - 2 }
+                                    }
+                                    Text {
+                                        visible: root.wifiBusy === netEntry.modelData.ssid
+                                        text: "\u2026"
+                                        color: Colors.on_surface_variant
+                                        font { family: root.fontFamily; pixelSize: root.fontSize - 2 }
+                                    }
+                                    Text {
+                                        visible: netEntry.modelData.sec !== "open"
+                                        text: "\uf023" // nf-fa-lock
+                                        color: Colors.outline
+                                        font { family: root.fontFamily; pixelSize: root.fontSize - 4 }
+                                    }
+                                    Text {
+                                        visible: netEntry.modelData.conn
+                                        text: "\u2713"
+                                        color: Colors.primary
+                                        font { family: root.fontFamily; pixelSize: root.fontSize - 2 }
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: netArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        var m = netEntry.modelData
+                                        if (m.conn) {
+                                            Quickshell.execDetached(["bash", root.wifiScript, "disconnect"])
+                                        } else if (m.sec === "open" || root.wifiKnown.indexOf(m.ssid) >= 0) {
+                                            root.wifiConnect(m.ssid, "")
+                                        } else {
+                                            root.wifiExpanded =
+                                                (root.wifiExpanded === m.ssid) ? "" : m.ssid
+                                            root.wifiError = ""
+                                        }
+                                    }
+                                }
+                            }
+
+                            // inline password entry for new secured networks
+                            RowLayout {
+                                visible: root.wifiExpanded === netEntry.modelData.ssid
+                                Layout.fillWidth: true
+                                Layout.leftMargin: 6
+                                spacing: 6
+
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    implicitHeight: 26
+                                    radius: 6
+                                    color: Colors.surface_container_high
+                                    border.width: 1
+                                    border.color: root.wifiError === netEntry.modelData.ssid
+                                                  ? Colors.error : "transparent"
+                                    TextInput {
+                                        id: pwInput
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 8
+                                        anchors.rightMargin: 8
+                                        verticalAlignment: TextInput.AlignVCenter
+                                        clip: true
+                                        echoMode: TextInput.Password
+                                        color: Colors.on_surface
+                                        font { family: root.fontFamily; pixelSize: root.fontSize - 2 }
+                                        onVisibleChanged: if (visible) forceActiveFocus()
+                                        onAccepted: root.wifiConnect(netEntry.modelData.ssid, text)
+                                        Text {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            visible: pwInput.text.length === 0
+                                            text: root.wifiError === netEntry.modelData.ssid
+                                                  ? "wrong password?" : "password"
+                                            color: root.wifiError === netEntry.modelData.ssid
+                                                   ? Colors.error : Colors.outline
+                                            font { family: root.fontFamily; pixelSize: root.fontSize - 2 }
+                                        }
+                                    }
+                                }
+                                Rectangle {
+                                    implicitWidth: 50
+                                    implicitHeight: 26
+                                    radius: 6
+                                    color: Colors.primary
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: root.wifiBusy === netEntry.modelData.ssid ? "\u2026" : "join"
+                                        color: Colors.on_primary
+                                        font { family: root.fontFamily; pixelSize: root.fontSize - 3 }
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.wifiConnect(netEntry.modelData.ssid, pwInput.text)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Colors.outline_variant; opacity: 0.4 }
