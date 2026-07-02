@@ -13,29 +13,29 @@ import QtQuick
 // property starting with on + Uppercase as a signal handler (an illegal name).
 Singleton {
     // Base surfaces
-    readonly property color background:             "#19120c"
-    readonly property color on_background:          "#efe0d6"
-    readonly property color surface:                "#19120c"
-    readonly property color on_surface:             "#efe0d6"
-    readonly property color on_surface_variant:     "#d6c3b6"
-    readonly property color surface_container:      "#261e18"
-    readonly property color surface_container_high: "#312822"
+    readonly property color background:             "#14140c"
+    readonly property color on_background:          "#e6e3d6"
+    readonly property color surface:                "#14140c"
+    readonly property color on_surface:             "#e6e3d6"
+    readonly property color on_surface_variant:     "#c9c7b6"
+    readonly property color surface_container:      "#202018"
+    readonly property color surface_container_high: "#2b2a22"
 
     // Accent
-    readonly property color primary:                "#ffb77b"
-    readonly property color on_primary:             "#4d2700"
-    readonly property color primary_container:      "#6c3a06"
-    readonly property color on_primary_container:   "#ffdcc2"
+    readonly property color primary:                "#c9cb77"
+    readonly property color on_primary:             "#313300"
+    readonly property color primary_container:      "#484a00"
+    readonly property color on_primary_container:   "#e6e890"
 
-    readonly property color secondary:              "#e3c0a6"
-    readonly property color on_secondary:           "#412c19"
-    readonly property color secondary_container:    "#5a422e"
+    readonly property color secondary:              "#c9c8a5"
+    readonly property color on_secondary:           "#313219"
+    readonly property color secondary_container:    "#48482d"
 
-    readonly property color tertiary:               "#c4cb97"
+    readonly property color tertiary:               "#a3d0be"
 
     // Lines / muted
-    readonly property color outline:                "#9e8e82"
-    readonly property color outline_variant:        "#51443b"
+    readonly property color outline:                "#939182"
+    readonly property color outline_variant:        "#48473a"
 
     // State
     readonly property color error:                  "#ffb4ab"

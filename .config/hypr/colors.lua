@@ -5,11 +5,11 @@
 -- NOTE: never put double-brace placeholder examples in these comments,
 -- matugen tries to evaluate them and the render breaks.
 return {
-    background = "19120c",
-    surface    = "19120c",
-    primary    = "ffb77b",
-    secondary  = "e3c0a6",
-    tertiary   = "c4cb97",
-    outline    = "9e8e82",
+    background = "14140c",
+    surface    = "14140c",
+    primary    = "c9cb77",
+    secondary  = "c9c8a5",
+    tertiary   = "a3d0be",
+    outline    = "939182",
     error      = "ffb4ab",
 }

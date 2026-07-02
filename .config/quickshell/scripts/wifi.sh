@@ -36,7 +36,8 @@ status)
     systemctl is-active --quiet iwd || { echo nobackend; exit 0; }
     [ -n "$DEV" ] || { echo nodev; exit 0; }
     show="$(iwctl device "$DEV" show 2>/dev/null | strip_ansi)"
-    if ! grep -qE '^\s*Powered\s+on' <<<"$show"; then
+    # iwctl decorates property lines (e.g. "  *  Powered  on"), so no ^-anchor
+    if ! grep -qE '\bPowered +on\b' <<<"$show"; then
         echo "off $DEV"; exit 0
     fi
     ssid="$(iwctl station "$DEV" show 2>/dev/null | strip_ansi \
