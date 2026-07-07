@@ -24,7 +24,7 @@ PanelWindow {
 
     signal dismissed()
 
-    property string fontFamily: "JetBrainsMono Nerd Font"
+    property string fontFamily: "Adwaita Sans"
 
     // Three balanced columns of category groups:
     // [ [ {name, binds:[{keys,desc},…]}, … ], … ]
@@ -85,7 +85,7 @@ PanelWindow {
         anchors.centerIn: parent
         width: content.implicitWidth + 64
         height: content.implicitHeight + 56
-        radius: 16
+        radius: 18
         color: Colors.surface_container
         border.color: Colors.outline_variant
         border.width: 1
@@ -154,7 +154,7 @@ PanelWindow {
                                         Rectangle {
                                             implicitWidth: keyText.implicitWidth + 14
                                             implicitHeight: 22
-                                            radius: 6
+                                            radius: 8
                                             color: Colors.surface_container_high
                                             Text {
                                                 id: keyText

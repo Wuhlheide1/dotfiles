@@ -1,0 +1,9 @@
+# AUR packages (paru -S --needed - < this file). install.sh bootstraps paru
+# itself first, so paru does not belong in this list.
+
+brave-bin
+vesktop-bin
+valent
+
+# desktop-only: fan curves for the tower. Skip on the laptop.
+coolercontrol-bin

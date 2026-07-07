@@ -23,7 +23,9 @@ hl.config({
 
         col = {
             active_border   = { colors = { "rgba(" .. c.primary .. "ff)", "rgba(" .. c.tertiary .. "ff)" }, angle = 45 },
-            inactive_border = "rgba(" .. c.outline .. "aa)",
+            -- fixed neutral, matching Colors.qml's outline: accents-only theming —
+            -- matugen's outline drifts warm/cool per wallpaper, surfaces must not
+            inactive_border = "rgba(8b8991aa)",
         },
 
         -- Set to true to enable resizing windows by clicking and dragging on borders and gaps
@@ -52,8 +54,8 @@ hl.config({
 
         blur = {
             enabled   = true,
-            size      = 3,
-            passes    = 1,
+            size      = 6,
+            passes    = 2,
             vibrancy  = 0.1696,
         },
     },

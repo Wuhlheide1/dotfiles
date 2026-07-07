@@ -1,0 +1,8 @@
+[
+  { "name": "GitHub",        "glyph": "", "url": "https://github.com",                 "keywords": "git code repos" },
+  { "name": "YouTube",       "glyph": "", "url": "https://youtube.com",                "keywords": "video watch" },
+  { "name": "Arch Wiki",     "glyph": "", "url": "https://wiki.archlinux.org",         "keywords": "linux docs help" },
+  { "name": "Downloads",     "glyph": "", "cmd": "xdg-open /home/wuhlheide/downloads || xdg-open /home/wuhlheide/Downloads", "keywords": "folder files" },
+  { "name": "Wallpapers",    "glyph": "", "cmd": "xdg-open /home/wuhlheide/images/wallpapers", "keywords": "folder images backgrounds" },
+  { "name": "Screenshots",   "glyph": "", "cmd": "xdg-open /home/wuhlheide/images/screenshots", "keywords": "folder captures" }
+]

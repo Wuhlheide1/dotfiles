@@ -1,0 +1,6 @@
+[Unit]
+Description=Random wallpaper + matugen accent re-theme
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /home/wuhlheide/.config/quickshell/scripts/wallpaper.sh random auto

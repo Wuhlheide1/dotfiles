@@ -39,19 +39,11 @@ hl.window_rule({
 -- })
 -- overlayLayerRule:set_enabled(false)
 
--- Hyprland-run windowrule
-hl.window_rule({
-    name  = "move-hyprland-run",
-    match = { class = "hyprland-run" },
-
-    move  = "20 monitor_h-120",
-    float = true,
-})
-
--- Bind workspaces to monitors so SUPER + [0-9] is predictable.
+-- Bind workspaces to monitors so SUPER + [1-6] is predictable.
 -- See https://wiki.hypr.land/Configuring/Workspace-Rules/
 --   HDMI-A-1 (second) -> workspace 6 only (SUPER + 6)
---   DP-2     (main)   -> all the rest     (SUPER + 1..5, 7..9, 0)
+--   DP-2     (main)   -> workspaces 1..5
+-- Only workspaces 1-6 exist; 7-10 are unbound on purpose (keybinds.lua).
 -- Without these rules a workspace opens on whichever monitor the cursor
 -- is on, which is why switching felt random.
 for ws = 1, 6 do

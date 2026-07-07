@@ -19,8 +19,6 @@ hl.monitor({
     scale    = "1",
 })
 
--- Screen brightness
-
-hl.bind("F1", hl.dsp.exec_cmd("brightnessctl s +5%"))
-hl.bind("F2", hl.dsp.exec_cmd("brightnessctl s 5%-"))
+-- Brightness binds live in keybinds.lua (SUPER+F1/F2 -> hyprsunset gamma via
+-- Quickshell); this desktop has no backlight device, so no brightnessctl here.
 

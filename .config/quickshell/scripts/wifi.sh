@@ -8,7 +8,7 @@
 #   wifi.sh known             one known ssid per line
 #   wifi.sh scan              trigger a scan (harmless if one is running)
 #   wifi.sh power on|off
-#   wifi.sh connect <ssid> [passphrase]
+#   wifi.sh connect <ssid> [--pw-stdin|passphrase]   (--pw-stdin: read passphrase from stdin)
 #   wifi.sh disconnect
 #   wifi.sh forget <ssid>
 set -uo pipefail
@@ -76,7 +76,13 @@ scan)       [ -n "$DEV" ] && iwctl station "$DEV" scan >/dev/null 2>&1 || true ;
 power)      [ -n "$DEV" ] && iwctl device "$DEV" set-property Powered "${2:?on|off}" ;;
 connect)
     ssid="${2:?ssid}"
-    if [ -n "${3:-}" ]; then
+    if [ "${3:-}" = "--pw-stdin" ]; then
+        # passphrase arrives on stdin so it never shows up in any argv;
+        # iwctl reads its passphrase prompt from piped stdin when not a tty
+        IFS= read -r pw
+        printf '%s\n' "$pw" | iwctl station "$DEV" connect "$ssid"
+    elif [ -n "${3:-}" ]; then
+        # legacy manual-CLI path; the UI always uses --pw-stdin
         iwctl --passphrase "$3" station "$DEV" connect "$ssid"
     else
         iwctl station "$DEV" connect "$ssid"

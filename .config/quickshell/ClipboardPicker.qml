@@ -10,6 +10,7 @@
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
+import Quickshell.Widgets
 import QtQuick
 import QtQuick.Layouts
 
@@ -27,7 +28,12 @@ PanelWindow {
 
     property string query: ""
 
-    // Raw history rows: { cid: "<id>", preview: "<text>" }
+    // Image entries get real thumbnails: their bytes are decoded once into
+    // this cache dir, keyed by cliphist id (stale thumbs GC'd on refresh).
+    readonly property string thumbDir: "/home/wuhlheide/.cache/quickshell/cliphist-thumbs"
+    property bool thumbsReady: false
+
+    // Raw history rows: { cid: "<id>", preview: "<text>", isImage, meta }
     ListModel { id: model }
 
     Process {
@@ -39,15 +45,38 @@ PanelWindow {
                 // cliphist rows are "<id>\t<preview>" (id may be left-padded).
                 var tab = line.indexOf("\t")
                 if (tab < 0) return
+                var preview = line.substring(tab + 1)
+                var img = /^\[\[ binary data .* (png|jpe?g|webp|bmp) \d+x\d+ \]\]$/.test(preview)
                 model.append({
                     cid: line.substring(0, tab).trim(),
-                    preview: line.substring(tab + 1)
+                    preview: preview,
+                    isImage: img,
+                    // "[[ binary data 72 KiB png 536x467 ]]" → "72 KiB png 536x467"
+                    meta: img ? preview.replace(/^\[\[ binary data /, "").replace(/ \]\]$/, "") : ""
                 })
             }
         }
+        onExited: {
+            var ids = []
+            for (var i = 0; i < model.count; i++)
+                if (model.get(i).isImage) ids.push(model.get(i).cid)
+            if (ids.length === 0) { picker.thumbsReady = true; return }
+            // decode missing thumbs; GC thumbs whose entry left the history
+            thumbProc.command = ["sh", "-c",
+                "d=" + picker.thumbDir + "; mkdir -p $d; ids=' " + ids.join(" ") + " '; " +
+                "for f in $d/*.png; do [ -e \"$f\" ] || break; b=${f##*/}; " +
+                "case $ids in *\" ${b%.png} \"*) ;; *) rm -f \"$f\";; esac; done; " +
+                "for id in $ids; do [ -f $d/$id.png ] || cliphist decode $id > $d/$id.png; done"]
+            thumbProc.running = true
+        }
     }
 
-    function refresh() { model.clear(); listProc.running = true }
+    Process {
+        id: thumbProc
+        onExited: picker.thumbsReady = true
+    }
+
+    function refresh() { thumbsReady = false; model.clear(); listProc.running = true }
 
     // Filter (substring on the preview) → plain JS array, like Launcher.results.
     readonly property var results: {
@@ -68,12 +97,23 @@ PanelWindow {
         list.positionViewAtIndex(selected, ListView.Contain)
     }
 
-    Process { id: decodeProc }
     function pick(entry) {
         if (!entry) return
-        // decode reads the id and re-copies the original bytes (text or image).
-        decodeProc.command = ["sh", "-c", "cliphist decode " + entry.cid + " | wl-copy"]
-        decodeProc.running = true
+        // MUST be execDetached: dismissed() deactivates the LazyLoader, which
+        // destroys this component and kills any member Process mid-pipe — the
+        // old Process-based version only copied when it won that race ("picking
+        // does nothing most of the time").
+        //
+        // After copying, paste straight into whichever window gets focus back:
+        // ctrl+v everywhere, ctrl+shift+v in kitty. send_shortcut must use the
+        // Lua dispatcher form on this setup — the classic
+        // `sendshortcut CTRL,V,` syntax is rejected by the non-legacy parser.
+        // The sleep gives the picker time to unmap and focus to return.
+        Quickshell.execDetached(["sh", "-c",
+            "cliphist decode " + entry.cid + " | wl-copy; sleep 0.2; " +
+            "cls=$(hyprctl activewindow -j | grep -o '\"class\": \"[^\"]*\"' | head -1 | cut -d'\"' -f4); " +
+            "if [ \"$cls\" = kitty ]; then mods='CTRL SHIFT'; else mods='CTRL'; fi; " +
+            "hyprctl dispatch \"hl.dsp.send_shortcut({ mods = '$mods', key = 'V' })\""])
         picker.dismissed()
     }
 
@@ -92,7 +132,7 @@ PanelWindow {
         width: 520
         height: 460
         anchors.centerIn: parent
-        radius: 16
+        radius: 18
         color: Colors.surface_container
         border.color: Colors.outline_variant
         border.width: 1
@@ -111,7 +151,7 @@ PanelWindow {
                 Rectangle {
                     Layout.fillWidth: true
                     implicitHeight: 44
-                    radius: 10
+                    radius: 12
                     color: Colors.surface_container_high
 
                     TextInput {
@@ -122,14 +162,14 @@ PanelWindow {
                         clip: true
                         focus: true
                         color: Colors.on_surface
-                        font.pixelSize: 16
+                        font { family: "Adwaita Sans"; pixelSize: 16 }
                         onTextChanged: picker.query = text
 
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
                             text: "Search clipboard…"
                             color: Colors.outline
-                            font.pixelSize: 16
+                            font { family: "Adwaita Sans"; pixelSize: 16 }
                             visible: input.text.length === 0
                         }
 
@@ -144,7 +184,7 @@ PanelWindow {
                 // Wipe the whole history.
                 Rectangle {
                     implicitWidth: 44; implicitHeight: 44
-                    radius: 10
+                    radius: 12
                     color: wipeArea.containsMouse ? Colors.error : Colors.surface_container_high
                     Text {
                         anchors.centerIn: parent
@@ -157,9 +197,10 @@ PanelWindow {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: { wipeProc.running = true; picker.refresh() }
+                        onClicked: wipeProc.running = true
                     }
-                    Process { id: wipeProc; command: ["cliphist", "wipe"] }
+                    // refresh only after the wipe finished, or the list re-reads stale entries
+                    Process { id: wipeProc; command: ["cliphist", "wipe"]; onExited: picker.refresh() }
                 }
             }
 
@@ -171,7 +212,7 @@ PanelWindow {
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 color: Colors.outline
-                font.pixelSize: 14
+                font { family: "Adwaita Sans"; pixelSize: 14 }
             }
 
             ListView {
@@ -185,15 +226,19 @@ PanelWindow {
                 spacing: 4
 
                 delegate: Rectangle {
+                    id: entryRow
                     required property var modelData
                     required property int index
 
+                    readonly property bool thumbed: modelData.isImage && picker.thumbsReady
+
                     width: list.width
-                    height: 40
-                    radius: 8
+                    height: thumbed ? 68 : 40
+                    radius: 10
                     color: index === picker.selected ? Colors.primary : "transparent"
 
                     Text {
+                        visible: !entryRow.thumbed
                         anchors.fill: parent
                         anchors.leftMargin: 12
                         anchors.rightMargin: 12
@@ -201,7 +246,39 @@ PanelWindow {
                         text: modelData.preview
                         elide: Text.ElideRight
                         color: index === picker.selected ? Colors.on_primary : Colors.on_surface
-                        font.pixelSize: 14
+                        font { family: "JetBrainsMono Nerd Font"; pixelSize: 13 }
+                    }
+
+                    // image entry: thumbnail + size/format instead of the
+                    // useless "[[ binary data ]]" text
+                    RowLayout {
+                        visible: entryRow.thumbed
+                        anchors.fill: parent
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 12
+                        spacing: 12
+                        ClippingRectangle {
+                            Layout.preferredWidth: 88
+                            Layout.preferredHeight: 54
+                            radius: 8
+                            color: Colors.surface_container_high
+                            Image {
+                                anchors.fill: parent
+                                asynchronous: true
+                                fillMode: Image.PreserveAspectCrop
+                                sourceSize { width: 176; height: 108 }
+                                // don't touch the file until the decode pass is done
+                                source: entryRow.thumbed
+                                    ? "file://" + picker.thumbDir + "/" + entryRow.modelData.cid + ".png" : ""
+                            }
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: modelData.meta
+                            elide: Text.ElideRight
+                            color: index === picker.selected ? Colors.on_primary : Colors.on_surface_variant
+                            font { family: "JetBrainsMono Nerd Font"; pixelSize: 12 }
+                        }
                     }
 
                     MouseArea {

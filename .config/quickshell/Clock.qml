@@ -1,4 +1,5 @@
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
@@ -10,7 +11,7 @@ Item {
     id: root
 
     property var barWindow
-    property string fontFamily: "JetBrainsMono Nerd Font"
+    property string fontFamily: "Adwaita Sans"
     property int fontSize: 14
 
     // month currently shown in the popup; reset to today each time it opens
@@ -43,18 +44,61 @@ Item {
     }
 
     // ---------------------------------------------------------------
+    // Weather: one quiet line in the flyout. open-meteo (no API key),
+    // fetched only when the flyout opens and at most every 30 min.
+    // Same fixed lat/lon as the ControlCenter night-light schedule.
+    property var wx: null          // { t, code, hi, lo, rain }
+    property double wxAt: 0
+    Process {
+        id: wxProc
+        command: ["sh", "-c",
+            "curl -sf --max-time 6 'https://api.open-meteo.com/v1/forecast?latitude=51.0&longitude=10.0"
+            + "&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,"
+            + "precipitation_probability_max&timezone=auto&forecast_days=1'"]
+        stdout: SplitParser {
+            onRead: line => {
+                try {
+                    var d = JSON.parse(line)
+                    root.wx = { t: Math.round(d.current.temperature_2m),
+                                code: d.current.weather_code,
+                                hi: Math.round(d.daily.temperature_2m_max[0]),
+                                lo: Math.round(d.daily.temperature_2m_min[0]),
+                                rain: d.daily.precipitation_probability_max[0] }
+                    root.wxAt = Date.now()
+                } catch (e) { /* offline / partial body — keep the old value */ }
+            }
+        }
+    }
+    // WMO weather_code → nf-weather glyph (all verified present in the font)
+    function wxGlyph(c) {
+        if (c === 0) return "\ue30d"            // clear
+        if (c <= 2)  return "\ue302"            // partly cloudy
+        if (c === 3) return "\ue312"            // overcast
+        if (c <= 48) return "\ue313"            // fog
+        if (c <= 67 || (c >= 80 && c <= 82)) return "\ue318"   // rain/drizzle
+        if (c <= 77 || c === 85 || c === 86) return "\ue31a"   // snow
+        if (c >= 95) return "\ue31d"            // thunderstorm
+        return "\ue312"
+    }
+
+    // ---------------------------------------------------------------
     // Calendar flyout (fullscreen overlay; click-outside dismisses)
     PanelWindow {
         id: calPopup
         visible: PopupBus.current === "calendar"
+        onVisibleChanged: {
+            if (visible && Date.now() - root.wxAt > 30 * 60 * 1000)
+                wxProc.running = true
+        }
         color: "transparent"
         exclusiveZone: 0
         screen: root.barWindow ? root.barWindow.screen : null
         anchors { top: true; left: true; right: true; bottom: true }
         WlrLayershell.layer: WlrLayer.Overlay
-        WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+        WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
 
         MouseArea { anchors.fill: parent; onClicked: PopupBus.close() }
+        Item { focus: true; Keys.onEscapePressed: PopupBus.close() }
 
         Rectangle {
             id: card
@@ -65,7 +109,7 @@ Item {
             width: 300
             height: implicitHeight
             implicitHeight: ccol.implicitHeight + 28
-            radius: 16
+            radius: 18
             color: Colors.surface_container
             border.color: Colors.outline_variant
             border.width: 1
@@ -80,16 +124,16 @@ Item {
 
             ColumnLayout {
                 id: ccol
-                anchors { left: parent.left; right: parent.right; top: parent.top; margins: 14 }
+                anchors { left: parent.left; right: parent.right; top: parent.top; margins: 17 }
                 spacing: 10
 
                 // --- month navigation header ---
                 RowLayout {
                     Layout.fillWidth: true
                     Text {
-                        text: ""   // nf-fa-chevron-left
+                        text: "\uf053"   // nf-fa-chevron-left
                         color: Colors.on_surface_variant
-                        font { family: root.fontFamily; pixelSize: 13 }
+                        font { family: "JetBrainsMono Nerd Font"; pixelSize: 13 }
                         MouseArea {
                             anchors.fill: parent; anchors.margins: -6
                             cursorShape: Qt.PointingHandCursor
@@ -109,9 +153,9 @@ Item {
                     }
                     Item { Layout.fillWidth: true }
                     Text {
-                        text: ""   // nf-fa-chevron-right
+                        text: "\uf054"   // nf-fa-chevron-right
                         color: Colors.on_surface_variant
-                        font { family: root.fontFamily; pixelSize: 13 }
+                        font { family: "JetBrainsMono Nerd Font"; pixelSize: 13 }
                         MouseArea {
                             anchors.fill: parent; anchors.margins: -6
                             cursorShape: Qt.PointingHandCursor
@@ -167,6 +211,27 @@ Item {
                                 font { family: root.fontFamily; pixelSize: 12; bold: cell.isToday }
                             }
                         }
+                    }
+                }
+
+                // --- weather: one quiet line, only when a fetch succeeded ---
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: root.wx !== null
+                    spacing: 8
+                    Text {
+                        text: root.wx ? root.wxGlyph(root.wx.code) : ""
+                        color: Colors.on_surface_variant
+                        font { family: "JetBrainsMono Nerd Font"; pixelSize: 13 }
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: root.wx ? root.wx.t + "°  ·  ↑" + root.wx.hi + "° ↓" + root.wx.lo + "°"
+                                        + (root.wx.rain >= 20 ? "  ·  \ue318 " + root.wx.rain + "%" : "")
+                              : ""
+                        color: Colors.on_surface_variant
+                        elide: Text.ElideRight
+                        font { family: root.fontFamily; pixelSize: 12 }
                     }
                 }
 

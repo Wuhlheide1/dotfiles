@@ -1,4 +1,5 @@
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Services.SystemTray
 import QtQuick
@@ -10,7 +11,7 @@ Item {
     id: root
 
     property var barWindow
-    property string fontFamily: "JetBrainsMono Nerd Font"
+    property string fontFamily: "Adwaita Sans"
     property int fontSize: 14
     // Driven by the shared coordinator so only one bar menu is open at a time.
     readonly property bool open: PopupBus.current === "tray"
@@ -24,10 +25,10 @@ Item {
         id: chevron
         anchors.centerIn: parent
         // nf-fa-chevron-up when open, chevron-down when closed
-        text: root.open ? "" : ""
+        text: root.open ? "\uf077" : "\uf078"
         color: root.open ? Colors.primary : Colors.on_surface
         opacity: 0.8
-        font { family: root.fontFamily; pixelSize: root.fontSize - 1 }
+        font { family: "JetBrainsMono Nerd Font"; pixelSize: root.fontSize - 1 }
         Behavior on color { ColorAnimation { duration: 120 } }
     }
 
@@ -35,6 +36,12 @@ Item {
         anchors.fill: parent
         cursorShape: Qt.PointingHandCursor
         onClicked: PopupBus.toggle("tray")
+    }
+
+    // CLI access: qs ipc call tray toggle
+    IpcHandler {
+        target: "tray"
+        function toggle(): void { PopupBus.toggle("tray") }
     }
 
     // Fullscreen overlay so clicking outside the flyout reliably dismisses it.
@@ -46,9 +53,10 @@ Item {
         screen: root.barWindow ? root.barWindow.screen : null
         anchors { top: true; left: true; right: true; bottom: true }
         WlrLayershell.layer: WlrLayer.Overlay
-        WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+        WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
 
         MouseArea { anchors.fill: parent; onClicked: PopupBus.close() }
+        Item { focus: true; Keys.onEscapePressed: PopupBus.close() }
 
         Rectangle {
             id: trayBg
@@ -65,8 +73,8 @@ Item {
             width: implicitWidth
             height: implicitHeight
             implicitWidth: Math.max(140, trayRow.implicitWidth + 20)
-            implicitHeight: 52
-            radius: 14
+            implicitHeight: 56
+            radius: 18
             color: Colors.surface_container
             border.color: Colors.outline_variant
             border.width: 1
@@ -102,7 +110,7 @@ Item {
                         id: cell
                         Layout.preferredWidth: 38
                         Layout.preferredHeight: 38
-                        radius: 10
+                        radius: 12
                         color: cellArea.containsMouse ? Colors.surface_container_high : "transparent"
                         Behavior on color { ColorAnimation { duration: 100 } }
 
@@ -121,17 +129,21 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
                             onClicked: (m) => {
                                 if (m.button === Qt.RightButton && modelData.hasMenu) {
                                     // coords relative to the (now fullscreen) window
                                     var p = mapToItem(null, m.x, m.y)
                                     modelData.display(trayPopup, p.x, p.y)
+                                } else if (m.button === Qt.MiddleButton) {
+                                    modelData.secondaryActivate()
                                 } else {
                                     modelData.activate()
                                     PopupBus.close()
                                 }
                             }
+                            // scroll on an icon (e.g. volume apps adjust level)
+                            onWheel: (w) => modelData.scroll(w.angleDelta.y / 120, false)
                         }
 
                         // tooltip with the item's title on hover
@@ -142,7 +154,7 @@ Item {
                             anchors.horizontalCenter: parent.horizontalCenter
                             width: tipText.implicitWidth + 14
                             height: tipText.implicitHeight + 8
-                            radius: 6
+                            radius: 8
                             color: Colors.surface_container_high
                             border.color: Colors.outline_variant
                             border.width: 1

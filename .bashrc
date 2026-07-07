@@ -1,3 +1,5 @@
+export PATH="$HOME/.npm-global/bin:$PATH"
+export PATH="/usr/bin:$PATH"
 #
 # ~/.bashrc
 #

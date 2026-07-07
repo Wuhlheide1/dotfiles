@@ -15,7 +15,7 @@ Item {
     // Single-user box: hard path, same convention as the rest of this config.
     readonly property string script: "/home/wuhlheide/.config/quickshell/scripts/screenshot.sh"
 
-    // mode: "region" | "full" | "window"
+    // mode: "region" | "full" | "window" | "edit" (annotate in satty)
     function shoot(mode: string): void {
         Quickshell.execDetached(["bash", root.script, mode]);
     }

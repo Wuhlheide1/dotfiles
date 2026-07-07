@@ -30,21 +30,28 @@ PanelWindow {
     // --- config -----------------------------------------------------------
     property string wallDir: "/home/wuhlheide/images/wallpapers"
 
-    // Build the shell command for a chosen wallpaper. Edit here to swap backend.
-    // awww gives a nice animated transition; matugen re-themes everything.
-    function setCmd(path) {
-        // --prefer is required when matugen runs without a terminal (as it does
-        // from here). 'lightness' picks the lightest dominant color, which varies
-        // per wallpaper; 'saturation' tended to grab the same red/pink in every
-        // image, making different wallpapers look identically themed.
-        return "awww img '" + path + "' --transition-type grow --transition-fps 60 "
-             + "&& matugen image '" + path + "' --prefer lightness";
+    // awww + matugen + hyprctl reload all live in wallpaper.sh so the picker,
+    // the shuffle keybind, login and the timer apply wallpapers identically.
+    property string wallScript: "/home/wuhlheide/.config/quickshell/scripts/wallpaper.sh"
+
+    // the wallpaper currently driving the theme (wallpaper.sh state file)
+    FileView {
+        id: curFile
+        path: "/home/wuhlheide/.local/state/quickshell/wallpaper"
+        blockLoading: true
+        printErrors: false
     }
+    readonly property string current: (curFile.text() || "").trim()
 
     // Run detached: a plain Process would be killed when the picker closes
     // (the LazyLoader destroys this component), aborting awww/matugen mid-run.
     function apply(path) {
-        Quickshell.execDetached(["sh", "-c", setCmd(path)]);
+        Quickshell.execDetached(["bash", wallScript, "set", path]);
+        picker.dismissed();
+    }
+
+    function shuffle() {
+        Quickshell.execDetached(["bash", wallScript, "random"]);
         picker.dismissed();
     }
 
@@ -71,7 +78,7 @@ PanelWindow {
         width: 860
         height: 560
         anchors.centerIn: parent
-        radius: 16
+        radius: 18
         color: Colors.surface_container
         border.color: Colors.outline_variant
         border.width: 1
@@ -83,10 +90,41 @@ PanelWindow {
             anchors.margins: 16
             spacing: 12
 
-            Text {
-                text: "Wallpaper  ·  " + wallModel.count + " images"
-                color: Colors.on_surface
-                font { family: "JetBrainsMono Nerd Font"; pixelSize: 16; bold: true }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                Text {
+                    text: "Wallpaper  ·  " + wallModel.count + " images"
+                    color: Colors.on_surface
+                    font { family: "Adwaita Sans"; pixelSize: 16; bold: true }
+                }
+                Item { Layout.fillWidth: true }
+                Item {
+                    implicitWidth: shuffleRow.implicitWidth
+                    implicitHeight: shuffleRow.implicitHeight
+                    Row {
+                        id: shuffleRow
+                        spacing: 6
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "" // nf-fa-random
+                            color: Colors.primary
+                            font { family: "JetBrainsMono Nerd Font"; pixelSize: 13 }
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "Shuffle"
+                            color: Colors.primary
+                            font { family: "Adwaita Sans"; pixelSize: 13 }
+                        }
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        anchors.margins: -6
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: picker.shuffle()
+                    }
+                }
             }
 
             GridView {
@@ -115,7 +153,7 @@ PanelWindow {
                     Rectangle {
                         anchors.fill: parent
                         anchors.margins: 6
-                        radius: 10
+                        radius: 12
                         clip: true
                         color: Colors.surface_container_high
                         border.width: index === grid.currentIndex ? 3 : 0
@@ -129,6 +167,23 @@ PanelWindow {
                             fillMode: Image.PreserveAspectCrop
                             sourceSize.width: 320   // downscale; thumbnails only
                             source: fileUrl
+                        }
+
+                        // "current" badge on the wallpaper driving the theme
+                        Rectangle {
+                            visible: filePath === picker.current
+                            anchors { top: parent.top; left: parent.left; margins: 8 }
+                            width: curLabel.implicitWidth + 14
+                            height: 20
+                            radius: 10
+                            color: Colors.primary
+                            Text {
+                                id: curLabel
+                                anchors.centerIn: parent
+                                text: "current"
+                                color: Colors.on_primary
+                                font { family: "Adwaita Sans"; pixelSize: 10; bold: true }
+                            }
                         }
 
                         Rectangle {   // filename caption strip

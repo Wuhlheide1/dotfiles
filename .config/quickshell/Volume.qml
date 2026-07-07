@@ -7,7 +7,7 @@ import QtQuick
 Item {
     id: root
 
-    property string fontFamily: "JetBrainsMono Nerd Font"
+    property string fontFamily: "Adwaita Sans"
     property int fontSize: 14
     property real step: 0.05
 
@@ -34,15 +34,15 @@ Item {
         // nf-fa volume-off / volume-down / volume-up
         text: root.muted || root.vol <= 0 ? "\uf026" : (root.vol < 0.5 ? "\uf027" : "\uf028")
         color: root.muted || root.vol <= 0 ? Colors.outline : Colors.on_surface
-        font { family: root.fontFamily; pixelSize: root.fontSize + 1 }
+        font { family: "JetBrainsMono Nerd Font"; pixelSize: root.fontSize + 1 }
     }
 
     // invisible width reference: the widest of the three speaker glyphs
     Text {
         id: metric
         visible: false
-        text: ""
-        font { family: root.fontFamily; pixelSize: root.fontSize + 1 }
+        text: "\uf028"
+        font { family: "JetBrainsMono Nerd Font"; pixelSize: root.fontSize + 1 }
     }
 
     MouseArea {

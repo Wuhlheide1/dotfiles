@@ -1,27 +1,25 @@
 # matugen configuration
-# Run:  matugen image /path/to/wallpaper.png        (uses default scheme/mode)
-#       matugen image /path/to/wallpaper.png -m dark
-#       matugen color hex "#7dcfff"                  (palette from one color)
+# Canonical invocation lives in ~/.config/quickshell/scripts/wallpaper.sh:
+#       matugen image <wallpaper> -t scheme-content --source-color-index 0
+# scheme-content keeps the wallpaper's real color as the accent (tonal-spot
+# pastel-shifts it); index 0 = most dominant color, skips the picker prompt.
+# One-off runs:  matugen color hex "#7dcfff"   (palette from one color)
 #
 # Each [templates.NAME] block reads input_path, fills in the {{colors.*}}
 # placeholders, and writes the result to output_path. matugen expands ~.
 
 [config]
-# Material You scheme. Options include: scheme-tonal-spot (default),
-# scheme-content, scheme-expressive, scheme-fidelity, scheme-vibrant,
-# scheme-neutral, scheme-monochrome.
-# scheme = "scheme-tonal-spot"
 
+# Accents only — Colors.qml itself is hand-written and watches this JSON so
+# it can ANIMATE to the new palette (writing a .qml would hard-reload the shell).
 [templates.quickshell]
-input_path = '~/.config/matugen/templates/Colors.qml'
-output_path = '~/.config/quickshell/Colors.qml'
-
-[templates.kitty]
-input_path  = '~/.config/matugen/templates/kitty.conf'
-output_path = '~/.config/kitty/colors-matugen.conf'
-# reload colors in already-open kitty windows (exact-name pkill is safe)
-post_hook   = 'pkill -USR1 -x kitty || true'
+input_path = '~/.config/matugen/templates/colors.json'
+output_path = '~/.local/state/quickshell/colors.json'
 
 [templates.hyprland]
 input_path  = '~/.config/matugen/templates/hypr-colors.lua'
 output_path = '~/.config/hypr/colors.lua'
+
+[templates.hyprlock]
+input_path  = '~/.config/matugen/templates/hyprlock-colors.conf'
+output_path = '~/.config/hypr/hyprlock-colors.conf'
