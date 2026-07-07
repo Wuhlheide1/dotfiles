@@ -65,6 +65,7 @@ hl.bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "e-1" })) -- prev
 
 -- @ Tools
 hl.bind(mainMod .. " + A", hl.dsp.exec_cmd("qs ipc call control toggle"))   -- control center
+hl.bind(mainMod .. " + D", hl.dsp.exec_cmd("qs ipc call dashboard toggle")) -- ambient dashboard
 hl.bind(mainMod .. " + N", hl.dsp.exec_cmd("qs ipc call notif toggle"))     -- notification center
 hl.bind(mainMod .. " + T", hl.dsp.exec_cmd("qs ipc call timers toggle"))    -- timers & alarms
 hl.bind(mainMod .. " + K", hl.dsp.exec_cmd("qs ipc call cheatsheet toggle")) -- this cheatsheet

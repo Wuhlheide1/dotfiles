@@ -4,6 +4,7 @@ import Quickshell.Wayland
 import Quickshell.Services.Pipewire
 import Quickshell.Bluetooth
 import Quickshell.Services.Mpris
+import Quickshell.Services.UPower
 import Quickshell.Widgets
 import QtQuick
 import QtQuick.Layouts
@@ -136,6 +137,7 @@ Item {
         printErrors: false
     }
     Component.onCompleted: {
+        ppCheck.running = true   // probe power-profiles-daemon for the Power tile
         // game mode survives shell restarts (the hypr config is still gamed;
         // the tile must show that instead of silently reading "Off")
         gameMode = (gameFile.text() || "").trim() === "1"
@@ -166,6 +168,60 @@ Item {
         nightFile.setText(t === 0 ? (manual ? "0" : "") : String(t))
     }
     function cycleNight() { setNight((nightIdx + 1) % nightLevels.length, true) }
+
+    // --- page 3: display & power tiles ---------------------------------
+    // Screen magnifier: cycle the Hyprland cursor zoom. Transient (not
+    // persisted — a stuck 3x zoom surviving a reboot would be baffling).
+    readonly property var zoomLevels: [1.0, 1.5, 2.0, 3.0]
+    property int zoomIdx: 0
+    function cycleZoom() {
+        zoomIdx = (zoomIdx + 1) % zoomLevels.length
+        Quickshell.execDetached(["hyprctl", "eval",
+            "hl.config({ cursor = { zoom_factor = " + zoomLevels[zoomIdx] + " } })"])
+    }
+
+    // Colour filter: cycle a full-screen GLSL shader (files in hypr/shaders).
+    // Also transient — no one wants to boot into inverted colours.
+    readonly property string shaderDir: "/home/wuhlheide/.config/hypr/shaders/"
+    readonly property var filterNames:   ["Off", "Grayscale", "Invert", "Sepia"]
+    readonly property var filterShaders: ["", "grayscale.frag", "invert.frag", "sepia.frag"]
+    property int filterIdx: 0
+    function cycleFilter() {
+        filterIdx = (filterIdx + 1) % filterNames.length
+        var s = filterShaders[filterIdx]
+        Quickshell.execDetached(["hyprctl", "eval",
+            "hl.config({ decoration = { screen_shader = '"
+            + (s === "" ? "" : shaderDir + s) + "' } })"])
+    }
+
+    // one-tap wallpaper shuffle (same script the picker / keybind use)
+    readonly property string wallScript: "/home/wuhlheide/.config/quickshell/scripts/wallpaper.sh"
+
+    // Power profiles (UPower): only meaningful with power-profiles-daemon,
+    // which isn't on the desktop — probe once so the tile stays hidden here
+    // and simply lights up on the laptop after the daemon is installed.
+    property bool hasPowerProfiles: false
+    Process {
+        id: ppCheck
+        command: ["systemctl", "is-active", "power-profiles-daemon"]
+        stdout: SplitParser { onRead: line => { if (line.trim() === "active") root.hasPowerProfiles = true } }
+    }
+    readonly property var ppNames: ["Saver", "Balanced", "Performance"]
+    function ppLabel() {
+        var p = PowerProfiles.profile
+        return p === PowerProfile.PowerSaver ? "Saver"
+             : p === PowerProfile.Performance ? "Performance" : "Balanced"
+    }
+    function cyclePower() {
+        var p = PowerProfiles.profile
+        // Saver -> Balanced -> Performance -> Saver; skip Performance if the
+        // hardware doesn't offer it (most laptops on battery still do)
+        if (p === PowerProfile.PowerSaver) PowerProfiles.profile = PowerProfile.Balanced
+        else if (p === PowerProfile.Balanced)
+            PowerProfiles.profile = PowerProfiles.hasPerformanceProfile
+                ? PowerProfile.Performance : PowerProfile.PowerSaver
+        else PowerProfiles.profile = PowerProfile.PowerSaver
+    }
 
     // --- pending updates (repo via checkupdates + AUR via paru) ---
     // Checked 90s after shell start, then every 2h; also re-checked when the
@@ -1158,8 +1214,8 @@ Item {
                         Layout.fillWidth: true
                         clip: true
                         property int page: 0
-                        readonly property int pages: 2
-                        implicitHeight: page === 0 ? tilesP1.implicitHeight : tilesP2.implicitHeight
+                        readonly property int pages: 3
+                        implicitHeight: [tilesP1, tilesP2, tilesP3][page].implicitHeight
                         Behavior on implicitHeight { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
 
                         ColumnLayout {
@@ -1300,6 +1356,64 @@ Item {
                                     openable: false
                                     onToggled: if (root.micReady)
                                         root.mic.audio.muted = !root.mic.audio.muted
+                                }
+                            }
+                        }
+
+                        // page 3: display & power
+                        ColumnLayout {
+                            id: tilesP3
+                            width: tilePager.width
+                            x: 2 * tilePager.width - tilePager.page * tilePager.width
+                            Behavior on x { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                            spacing: 10
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 10
+
+                                Tile {
+                                    glyph: "\uf00e" // nf-fa-search-plus
+                                    title: "Screen Zoom"
+                                    subtitle: root.zoomIdx === 0 ? "Off"
+                                        : root.zoomLevels[root.zoomIdx] + "\u00d7"
+                                    on: root.zoomIdx > 0
+                                    openable: false
+                                    onToggled: root.cycleZoom()
+                                }
+                                Tile {
+                                    glyph: "\uf042" // nf-fa-adjust
+                                    title: "Colour Filter"
+                                    subtitle: root.filterNames[root.filterIdx]
+                                    on: root.filterIdx > 0
+                                    openable: false
+                                    onToggled: root.cycleFilter()
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 10
+
+                                Tile {
+                                    glyph: "\uf074" // nf-fa-random (shuffle)
+                                    title: "Wallpaper"
+                                    subtitle: "Shuffle now"
+                                    on: false
+                                    openable: false
+                                    onToggled: Quickshell.execDetached(["bash", root.wallScript, "random"])
+                                }
+                                // Power profile \u2014 hidden unless power-profiles-daemon
+                                // is running (desktop: absent; laptop: lights up)
+                                Tile {
+                                    visible: root.hasPowerProfiles
+                                    glyph: "\uf0e7" // nf-fa-bolt
+                                    title: "Power"
+                                    subtitle: root.hasPowerProfiles ? root.ppLabel() : "\u2014"
+                                    on: root.hasPowerProfiles
+                                        && PowerProfiles.profile === PowerProfile.Performance
+                                    openable: false
+                                    onToggled: root.cyclePower()
                                 }
                             }
                         }

@@ -79,6 +79,18 @@ PanelWindow {
         function open():   void { cheatsheetLoader.active = true }
     }
 
+    // Ambient dashboard (SUPER+D) — clock/weather/vitals + live window dock.
+    LazyLoader {
+        id: dashboardLoader
+        Dashboard { onDismissed: dashboardLoader.active = false }
+    }
+
+    IpcHandler {
+        target: "dashboard"
+        function toggle(): void { dashboardLoader.active = !dashboardLoader.active }
+        function open():   void { dashboardLoader.active = true }
+    }
+
     // Brightness (DDC backlight when available, else hyprsunset gamma) —
     // driven by SUPER+F1/F2 and the XF86MonBrightness keys.
     IpcHandler {
