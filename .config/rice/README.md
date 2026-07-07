@@ -3,7 +3,12 @@
 Everything needed to move this Hyprland/Quickshell desktop to another Arch
 machine (or rebuild this one).
 
-## Moving to a new machine
+**The whole setup is now also a git repo** (`~/.dotfiles`, pushed to
+`github.com/Wuhlheide1/dotfiles`) — see the root `~/README.md` for the
+`git clone --bare` setup flow. That's the easier day-to-day method; this
+tarball path still works as an offline fallback.
+
+## Moving to a new machine (tarball method)
 
 On this machine:
 
@@ -54,6 +59,10 @@ per machine).
   (currently 51.0/10.0 ≈ central Germany).
 * coolercontrol is desktop-only; skip it on the laptop
   (`packages-aur.txt` marks it).
+* **Dual-boot MacBook**: this is an Intel Mac, not standard PC hardware —
+  see **[touchbar-mac.md](touchbar-mac.md)** for T2 bring-up (apple-bce,
+  Wi-Fi, audio) and the Touch Bar specifically before doing anything else on
+  that machine.
 
 ## Why not Nix?
 
@@ -66,9 +75,9 @@ need overlays, and day-to-day tinkering gains a rebuild step. For one desktop
 the value for 2 % of the ceremony. If the fleet ever grows past two machines,
 revisit.
 
-Worth doing instead: keep `~/.config/{quickshell,hypr,matugen,rice}` in a git
-repo (`git init` + a private GitHub remote) so the laptop can `git pull` rice
-improvements instead of re-importing tarballs.
+Done instead: the whole home directory is now a bare git repo pushed to
+GitHub (see the note at the top of this file) — the laptop can `git pull`
+rice improvements instead of re-importing tarballs.
 
 ## Keeping the manifests honest
 
