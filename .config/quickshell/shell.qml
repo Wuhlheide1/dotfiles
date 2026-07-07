@@ -312,6 +312,14 @@ PanelWindow {
             opacity: 0.5
         }
 
+        // Laptop battery (self-hides on desktops with no battery device)
+        Battery {
+            anchors.verticalCenter: parent.verticalCenter
+            Layout.rightMargin: 10
+            fontFamily: root.fontFamily
+            fontSize: root.fontSize
+        }
+
         // Volume: scroll to adjust, click to mute
         Volume {
             anchors.verticalCenter: parent.verticalCenter
