@@ -1,0 +1,50 @@
+{
+    "appearance": {
+        "transparency": {
+            "enabled": true
+        }
+    },
+    "bar": {
+        "workspaces": {
+            "perMonitor": true,
+            "showUnoccupied": false,
+            "shown": 6,
+            "displayType": "text",
+            "label": "",
+            "occupiedLabel": "",
+            "activeLabel": ""
+        }
+    },
+    "general": {
+        "idle": {
+            "inhibitWhenAudio": true,
+            "lockBeforeSleep": true,
+            "timeouts": [
+                {
+                    "enabled": true,
+                    "idleAction": "lock",
+                    "inhibitWhenAudio": false,
+                    "inhibitWhenCharging": false,
+                    "respectInhibitors": true,
+                    "timeout": 300
+                },
+                {
+                    "enabled": true,
+                    "idleAction": "dpms off",
+                    "inhibitWhenAudio": false,
+                    "inhibitWhenCharging": false,
+                    "respectInhibitors": true,
+                    "returnAction": "dpms on",
+                    "timeout": 600
+                }
+            ]
+        }
+    },
+    "paths": {
+        "wallpaperDir": "/home/wuhlheide/images/wallpapers"
+    },
+    "services": {
+        "sensorUnits": "Celsius",
+        "visualiserBars": 60
+    }
+}

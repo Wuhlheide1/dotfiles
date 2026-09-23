@@ -9,6 +9,13 @@ hl.env("XCURSOR_SIZE", "36")
 hl.env("HYPRCURSOR_THEME", "Future-Cyan-Hyprcursor_Theme")
 hl.env("HYPRCURSOR_SIZE", "36")
 
+-- Fcitx5 Japanese IME: route Qt/GTK/XWayland apps through fcitx so the JIS
+-- keys (英数/Eisu, 変換/Henkan, 無変換/Muhenkan, かな, 半角/全角) reach Mozc.
+-- (Native Wayland apps use text-input-v3 automatically; these cover the rest.)
+hl.env("GTK_IM_MODULE", "fcitx")
+hl.env("QT_IM_MODULE", "fcitx")
+hl.env("XMODIFIERS", "@im=fcitx")
+
 
 -----------------------
 ----- PERMISSIONS -----
