@@ -132,7 +132,7 @@ hl.bind(mainMod .. " + SHIFT + L", hl.dsp.exec_cmd("systemctl suspend"), { locke
 -- Wallpaper: the launcher's `>wall` mode is the picker; this is the shuffle
 -- that the old wallpaper-shuffle.timer used to do. Changing the wallpaper
 -- re-themes the whole shell (Caelestia generates the scheme from the image).
-hl.bind(mainMod .. " + SHIFT + W", hl.dsp.exec_cmd("caelestia wallpaper -r")) -- random wallpaper
+hl.bind(mainMod .. " + SHIFT + W", hl.dsp.exec_cmd("caelestia wallpaper -r -N")) -- random wallpaper
 
 -- Clipboard history and emoji picker (fuzzel; pkill closes it if already open)
 hl.bind(mainMod .. " + V",       hl.dsp.exec_cmd("pkill fuzzel || caelestia clipboard"))

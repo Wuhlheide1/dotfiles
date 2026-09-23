@@ -27,3 +27,6 @@ require("windowsAndWorkspaces")
 --                          is the one that actually reaches child processes
 --   * fcitx5 autostart  -> autostart.lua             (hl.exec_cmd)
 --   * kb_layout = jp    -> misc.lua                  (hl.config)
+
+-- HyprMod managed settings
+require("hyprland-gui")

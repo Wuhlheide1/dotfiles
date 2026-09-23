@@ -29,6 +29,54 @@ hl.window_rule({
     no_focus = true,
 })
 
+
+--------------------
+---- WINDOW RULES --
+--------------------
+-- Small utility windows are floated and centred rather than shoved into the
+-- tiling layout, where a 300x400 dialog would halve whatever you were reading.
+hl.window_rule({
+    name  = "float-utility-windows",
+    match = { class = "^(pwvucontrol|pavucontrol|blueman-manager|nm-connection-editor|org\\.gnome\\.FileRoller|file-roller|Galculator|xdg-desktop-portal-gtk)$" },
+
+    float  = true,
+    center = true,
+})
+
+-- GTK/Qt file pickers, which report no useful class of their own.
+-- The noun is required on purpose: a bare "^Open " would also float a browser
+-- window titled "Open Source Project - Brave".
+hl.window_rule({
+    name  = "float-dialogs",
+    match = { title = "^(Open|Save|Select|Choose|Export|Import)( a| an)? (File|Files|Folder|Directory|Image|Document|As)\\b.*" },
+
+    float  = true,
+    center = true,
+})
+
+-- Browser picture-in-picture: float it, pin it above everything and keep it
+-- out of the tiling layout, so a video survives a workspace switch.
+hl.window_rule({
+    name  = "pip-float-pin",
+    match = { title = "[Pp]icture[- ]in[- ][Pp]icture" },
+
+    float  = true,
+    pin    = true,
+    size   = "640 360",
+    no_shadow = true,
+})
+
+-- Tearing for fullscreen games only. general.allow_tearing is the master
+-- switch; `immediate` is what actually opts a window in, so nothing else on
+-- the desktop can tear. Worth having on a 280Hz panel where the latency
+-- saving is real and the artifacts are not visible at that frame rate.
+hl.window_rule({
+    name  = "tearing-for-games",
+    match = { class = "^(steam_app_\\d+|gamescope|Minecraft.*|com\\.mojang.*)$" },
+
+    immediate = true,
+})
+
 --------------------
 ---- LAYER RULES ---
 --------------------

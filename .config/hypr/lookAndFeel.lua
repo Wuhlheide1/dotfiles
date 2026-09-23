@@ -10,51 +10,65 @@
 -- The fallback keeps the config loadable before the first scheme is generated.
 local ok, c = pcall(require, "scheme.current")
 if not ok or type(c) ~= "table" then
-    c = { primary = "9ccbfb", onSurfaceVariant = "c8c5d1" }
+    c = { primary = "9ccbfb", onSurfaceVariant = "c8c5d1", shadow = "000000" }
 end
 
 -- Refer to https://wiki.hypr.land/Configuring/Basics/Variables/
 hl.config({
     general = {
-        gaps_in  = 4,
-        gaps_out = 20,
+        -- Caelestia's own proportions, so tiled windows sit on the same rhythm
+        -- as the shell's cards and the bar's floating pill (its width is
+        -- reserved separately via the layer's exclusive zone, so gaps_out is
+        -- not doing double duty on the left edge).
+        gaps_in  = 5,
+        gaps_out = 10,
 
         border_size = 2,
 
         col = {
+            -- Follows the wallpaper: `caelestia scheme` rewrites
+            -- scheme/current.lua and reloads Hyprland on every change.
             active_border   = "rgba(" .. c.primary .. "e6)",
             inactive_border = "rgba(" .. c.onSurfaceVariant .. "22)",
         },
 
-        -- Set to true to enable resizing windows by clicking and dragging on borders and gaps
         resize_on_border = true,
-
-        -- Please see https://wiki.hypr.land/Configuring/Advanced-and-Cool/Tearing/ before you turn this on
-        allow_tearing = false,
+        allow_tearing    = true, -- opt-in per window; see the gaming rule in windowsAndWorkspaces.lua
 
         layout = "dwindle",
     },
 
     decoration = {
-        rounding       = 14,
-        rounding_power = 4,
+        -- 15 / power 2 is Caelestia's card radius. Matching it is most of why
+        -- the desktop reads as one piece instead of windows under a shell.
+        rounding       = 15,
+        rounding_power = 2,
 
-        -- Change transparency of focused and unfocused windows
         active_opacity   = 1.0,
         inactive_opacity = 1.0,
 
         shadow = {
             enabled      = true,
-            range        = 4,
+            range        = 15,
             render_power = 3,
-            color        = 0xee1a1a1a,
+            color        = "rgba(" .. c.shadow .. "40)",
+            color_inactive = "rgba(" .. c.shadow .. "20)",
         },
 
         blur = {
-            enabled   = true,
-            size      = 6,
-            passes    = 2,
-            vibrancy  = 0.1696,
+            enabled           = true,
+            size              = 8,
+            passes            = 2,
+            vibrancy          = 0.1696,
+            new_optimizations = true,
+
+            -- Blur the surfaces that are NOT the shell: context menus, tooltips
+            -- and - the one that actually matters here - the fcitx5 candidate
+            -- window, so Japanese input matches everything else instead of
+            -- floating on a flat grey slab.
+            popups        = true,
+            input_methods = true,
+            special       = true,
         },
     },
 

@@ -1,21 +1,86 @@
 {
     "appearance": {
         "transparency": {
-            "enabled": true
+            "enabled": false
         }
+    },
+    "background": {
+        "wallpaperEnabled": true
     },
     "bar": {
+        "activeWindow": {
+            "compact": true,
+            "inverted": false
+        },
+        "clock": {
+            "background": false,
+            "showDate": true,
+            "showIcon": false,
+            "showSeconds": false
+        },
+        "persistent": true,
+        "popouts": {
+            "tray": true
+        },
+        "showOnHover": true,
+        "statusIcons": [
+            {
+                "enabled": true,
+                "id": "lockStatus"
+            },
+            {
+                "enabled": true,
+                "id": "audio"
+            },
+            {
+                "enabled": false,
+                "id": "microphone"
+            },
+            {
+                "enabled": false,
+                "id": "kbLayout"
+            },
+            {
+                "enabled": true,
+                "id": "network"
+            },
+            {
+                "enabled": true,
+                "id": "bluetooth"
+            },
+            {
+                "enabled": false,
+                "id": "battery"
+            }
+        ],
+        "tray": {
+            "background": true,
+            "compact": true,
+            "recolour": true
+        },
         "workspaces": {
-            "perMonitor": true,
-            "showUnoccupied": false,
-            "shown": 6,
-            "displayType": "text",
+            "activeLabel": "",
+            "displayType": "Text",
             "label": "",
+            "maxWindowIcons": 3,
+            "occupiedBg": true,
             "occupiedLabel": "",
-            "activeLabel": ""
-        }
+            "perMonitor": false,
+            "showUnoccupied": true,
+            "showWindows": false,
+            "showWindowsOnSpecialWorkspaces": false,
+            "shown": 6
+        },
+        "excludedScreens": [
+            "HDMI-A-1"
+        ]
     },
     "general": {
+        "apps": {
+            "terminal": [
+                "kitty"
+            ]
+        },
         "idle": {
             "inhibitWhenAudio": true,
             "lockBeforeSleep": true,
@@ -44,7 +109,42 @@
         "wallpaperDir": "/home/wuhlheide/images/wallpapers"
     },
     "services": {
+        "clockFormat": "TwentyFourHour",
         "sensorUnits": "Celsius",
-        "visualiserBars": 60
+        "visualiserBars": 60,
+        "weatherUnits": "Celsius",
+        "smartScheme": false
+    },
+    "utilities": {
+        "quickToggles": [
+            {
+                "enabled": true,
+                "id": "wifi"
+            },
+            {
+                "enabled": true,
+                "id": "bluetooth"
+            },
+            {
+                "enabled": true,
+                "id": "mic"
+            },
+            {
+                "enabled": true,
+                "id": "settings"
+            },
+            {
+                "enabled": false,
+                "id": "gameMode"
+            },
+            {
+                "enabled": true,
+                "id": "dnd"
+            },
+            {
+                "enabled": true,
+                "id": "vpn"
+            }
+        ]
     }
 }
