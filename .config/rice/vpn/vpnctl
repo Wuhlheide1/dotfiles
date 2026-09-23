@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+# vpnctl — the only privileged part of the VPN stack.
+#
+# Installed root-owned to /usr/local/bin/vpnctl and reachable from the desktop
+# through a single NOPASSWD sudoers line. Everything the UI wants to do is a
+# subcommand here, so the sudo grant stays one auditable file instead of a
+# blanket rule over wg-quick/nft/systemctl.
+#
+# Why a helper at all: `wg show` needs root (it reads the peer keys), and
+# wg-quick obviously does. Without this the Quickshell toggle would prompt for
+# a password every time, which is the opposite of the point.
+#
+#   vpnctl list                    NAME <tab> LABEL <tab> COUNTRY <tab> ENDPOINT_HOST
+#   vpnctl status                  key/value lines (see below)
+#   vpnctl up <name>               bring a tunnel up (tears down any other first)
+#   vpnctl down                    tear down whatever is up
+#   vpnctl killswitch on|off|status
+#   vpnctl autoconnect [name]|off|status
+set -uo pipefail
+
+CONFDIR=/etc/wireguard
+STATEDIR=/var/lib/vpnctl
+KS_FLAG="$STATEDIR/killswitch"
+KS_TABLE=vpnkill
+
+[ "$(id -u)" = 0 ] || { echo "vpnctl must run as root" >&2; exit 1; }
+mkdir -p "$STATEDIR"
+
+# ---------------------------------------------------------------- helpers ---
+
+# name of the wg interface currently up, or empty
+cur_iface() { wg show interfaces 2>/dev/null | tr ' ' '\n' | grep -v '^$' | head -1; }
+
+conf_of() { printf '%s/%s.conf\n' "$CONFDIR" "$1"; }
+
+# A conf may carry `# label: Frankfurt` / `# country: DE` comments. Absent
+# those we fall back to the filename, which for Surfshark's own downloads
+# looks like `de-fra` — good enough to render.
+meta() { # meta <file> <key>
+    sed -n "s/^#[[:space:]]*$2:[[:space:]]*//p" "$1" 2>/dev/null | head -1
+}
+
+endpoint_host_of() {
+    sed -n 's/^[[:space:]]*Endpoint[[:space:]]*=[[:space:]]*//p' "$1" 2>/dev/null | head -1 | cut -d: -f1
+}
+
+valid_name() { case "$1" in ''|*[!A-Za-z0-9._-]*) return 1 ;; *) return 0 ;; esac; }
+
+# ------------------------------------------------------------- killswitch ---
+# A tiny inet table with a drop policy on output. Everything needed to reach
+# the tunnel stays open: loopback, the LAN, DHCP, and the single UDP endpoint
+# we are tunnelling to. If the tunnel dies, nothing else gets out — which is
+# the entire purpose, so this is deliberately not "fail open".
+
+ks_apply() {
+    local ep_ip="${1:-}"
+    nft delete table inet "$KS_TABLE" 2>/dev/null
+    nft -f - <<NFT
+table inet $KS_TABLE {
+    chain output {
+        type filter hook output priority 0; policy drop;
+        oifname "lo" accept
+        oifname "wg*" accept
+        meta l4proto { icmp, icmpv6 } accept
+        ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16 } accept
+        ip6 daddr { fc00::/7, fe80::/10 } accept
+        udp dport { 67, 68 } accept
+        ${ep_ip:+ip daddr $ep_ip accept}
+        ct state established,related accept
+    }
+}
+NFT
+}
+
+ks_clear() { nft delete table inet "$KS_TABLE" 2>/dev/null; return 0; }
+
+ks_on() { [ -e "$KS_FLAG" ]; }
+
+# resolve the endpoint to an address so the killswitch can pinhole it
+ep_addr_of() {
+    local host="$1"
+    [ -n "$host" ] || return 0
+    getent ahostsv4 "$host" 2>/dev/null | awk '{print $1; exit}'
+}
+
+# ---------------------------------------------------------------- actions ---
+
+cmd_list() {
+    local f name
+    for f in "$CONFDIR"/*.conf; do
+        [ -e "$f" ] || continue
+        name="$(basename "$f" .conf)"
+        printf '%s\t%s\t%s\t%s\n' \
+            "$name" \
+            "$(meta "$f" label || true)" \
+            "$(meta "$f" country || true)" \
+            "$(endpoint_host_of "$f")"
+    done
+}
+
+cmd_status() {
+    local ifc conf ep hs rx tx
+    ifc="$(cur_iface)"
+    printf 'killswitch %s\n' "$(ks_on && echo on || echo off)"
+    printf 'autoconnect %s\n' "$(cmd_autoconnect status)"
+    if [ -z "$ifc" ]; then
+        printf 'state down\n'
+        return 0
+    fi
+    conf="$(cat "$STATEDIR/current" 2>/dev/null || echo "$ifc")"
+    ep="$(wg show "$ifc" endpoints 2>/dev/null | awk '{print $2; exit}')"
+    hs="$(wg show "$ifc" latest-handshakes 2>/dev/null | awk '{print $2; exit}')"
+    read -r rx tx < <(wg show "$ifc" transfer 2>/dev/null | awk '{print $2, $3; exit}')
+    printf 'state up\n'
+    printf 'iface %s\n' "$ifc"
+    printf 'name %s\n' "$conf"
+    printf 'label %s\n' "$(meta "$(conf_of "$conf")" label || true)"
+    printf 'country %s\n' "$(meta "$(conf_of "$conf")" country || true)"
+    printf 'endpoint %s\n' "${ep:-}"
+    printf 'handshake %s\n' "${hs:-0}"
+    printf 'rx %s\n' "${rx:-0}"
+    printf 'tx %s\n' "${tx:-0}"
+    printf 'ip %s\n' "$(ip -4 -br addr show "$ifc" 2>/dev/null | awk '{print $3; exit}')"
+}
+
+cmd_up() {
+    local name="${1:?name}" f old ep
+    valid_name "$name" || { echo "bad name" >&2; exit 2; }
+    f="$(conf_of "$name")"
+    [ -f "$f" ] || { echo "no such config: $name" >&2; exit 3; }
+
+    old="$(cur_iface)"
+    [ -n "$old" ] && wg-quick down "$old" >/dev/null 2>&1
+
+    # Pinhole the endpoint BEFORE the killswitch clamps down, otherwise the
+    # handshake itself is what gets dropped.
+    if ks_on; then
+        ep="$(ep_addr_of "$(endpoint_host_of "$f")")"
+        ks_apply "$ep"
+    fi
+
+    if wg-quick up "$name" >/dev/null 2>&1; then
+        printf '%s' "$name" > "$STATEDIR/current"
+        # Force every DNS query onto the tunnel's resolver (no split-horizon
+        # leak back to the LAN resolver).
+        resolvectl domain "$name" "~." >/dev/null 2>&1
+        echo ok
+    else
+        ks_on && ks_clear     # don't strand the machine offline on a failed up
+        echo failed >&2
+        exit 1
+    fi
+}
+
+cmd_down() {
+    local ifc; ifc="$(cur_iface)"
+    [ -n "$ifc" ] && wg-quick down "$ifc" >/dev/null 2>&1
+    rm -f "$STATEDIR/current"
+    ks_clear
+    echo ok
+}
+
+cmd_killswitch() {
+    case "${1:-status}" in
+        on)  : > "$KS_FLAG"
+             local ifc; ifc="$(cur_iface)"
+             [ -n "$ifc" ] && ks_apply "$(ep_addr_of "$(endpoint_host_of "$(conf_of "$(cat "$STATEDIR/current" 2>/dev/null || echo "$ifc")")")")"
+             echo on ;;
+        off) rm -f "$KS_FLAG"; ks_clear; echo off ;;
+        status) ks_on && echo on || echo off ;;
+        *) echo "usage: vpnctl killswitch on|off|status" >&2; exit 2 ;;
+    esac
+}
+
+cmd_autoconnect() {
+    case "${1:-status}" in
+        status)
+            systemctl list-unit-files 'wg-quick@*' --state=enabled --no-legend 2>/dev/null \
+                | awk -F'[@.]' '{print $2; exit}' | grep . || echo off ;;
+        off)
+            local u
+            for u in $(systemctl list-unit-files 'wg-quick@*' --state=enabled --no-legend 2>/dev/null | awk '{print $1}'); do
+                systemctl disable "$u" >/dev/null 2>&1
+            done
+            echo off ;;
+        *)
+            valid_name "$1" || { echo "bad name" >&2; exit 2; }
+            [ -f "$(conf_of "$1")" ] || { echo "no such config: $1" >&2; exit 3; }
+            cmd_autoconnect off >/dev/null
+            systemctl enable "wg-quick@$1" >/dev/null 2>&1 && echo "$1" ;;
+    esac
+}
+
+case "${1:-status}" in
+    list)        cmd_list ;;
+    status)      cmd_status ;;
+    up)          cmd_up "${2:-}" ;;
+    down)        cmd_down ;;
+    killswitch)  cmd_killswitch "${2:-status}" ;;
+    autoconnect) cmd_autoconnect "${2:-status}" ;;
+    *) echo "usage: vpnctl {list|status|up <name>|down|killswitch|autoconnect}" >&2; exit 2 ;;
+esac
