@@ -39,9 +39,29 @@ hl.config({
     },
 
     decoration = {
-        -- 15 / power 2 is Caelestia's card radius. Matching it is most of why
-        -- the desktop reads as one piece instead of windows under a shell.
-        rounding       = 15,
+        -- CONCENTRIC WITH CAELESTIA'S FRAME. The shell draws a rounded frame
+        -- around the desktop and reserves space for it with the
+        -- caelestia-border-exclusion layers, so windows nest inside a rounded
+        -- hole. For the curves to be parallel rather than merely both-round,
+        -- every corner has to share one arc centre:
+        --
+        --   border.thickness = 10   frame inner edge, from the screen edge
+        --   border.rounding  = 25   frame corner radius
+        --   => arc centre sits 10+25 = 35 from the screen corner
+        --
+        --   window content edge = thickness + gaps_out + border_size
+        --                       = 10 + 10 + 2 = 22 from the screen corner
+        --   => rounding = 35 - 22 = 13
+        --
+        -- Re-derive if you change gaps_out, border_size, or border.thickness /
+        -- border.rounding in shell.json:
+        --     rounding = (thickness + border.rounding) - (thickness + gaps_out + border_size)
+        --              =  border.rounding - gaps_out - border_size
+        rounding       = 13,
+        -- 2.0 = a true circular arc. Caelestia's frame is an SDF rect with a
+        -- plain radius (its `smoothing` is the blob-merge blend between open
+        -- drawers, NOT corner smoothing), so anything above 2 would squircle
+        -- the windows against round frame corners.
         rounding_power = 2,
 
         active_opacity   = 1.0,

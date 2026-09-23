@@ -15,4 +15,18 @@ hl.config({
         },
         gaps_in = 4,
     },
+    misc = {
+        key_press_enables_dpms = true,
+        mouse_move_enables_dpms = true,
+    },
+})
+
+-- Monitors
+hl.monitor({
+    output = "desc:Acer Technologies Acer XF270H B 0x9431E0C1",
+    disabled = false,
+    mode = "1920x1080@143.99Hz",
+    position = "0x0",
+    scale = 1,
+    cm = "srgb",
 })
