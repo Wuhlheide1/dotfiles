@@ -1,6 +1,6 @@
 {
     "theme": {
         "enableFuzzel": false,
-        "postHook": "pkill -USR1 -x kitty || true"
+        "postHook": "bash ~/.config/caelestia/hooks/theme-post.sh"
     }
 }
