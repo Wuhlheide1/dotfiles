@@ -1,36 +1,28 @@
 {
     "_comment": "Per-monitor override for the Acer (HDMI-A-1). Caelestia layers this on top of ../../shell.json for this screen only; DP-1 is untouched. Every key here must be a per-screen property (CONFIG_PROPERTY); anything the shell declares as CONFIG_GLOBAL_PROPERTY is global-only and will be ignored here.",
-
+    "background": {
+        "_comment": "The wallpaper is still drawn here. Set this to false for a bare screen - it will then show Hyprland's misc:background_color, which is set to the scheme background in ~/.config/hypr/misc.lua.",
+        "enabled": true
+    },
     "border": {
         "thickness": 0
     },
-
-    "osd": {
-        "enabled": false
-    },
-
-    "utilities": {
-        "enabled": false
-    },
-
     "dashboard": {
         "enabled": false
     },
-
-    "sidebar": {
-        "enabled": false
-    },
-
     "launcher": {
         "enabled": false
     },
-
+    "osd": {
+        "enabled": false
+    },
     "session": {
         "enabled": false
     },
-
-    "background": {
-        "enabled": true,
-        "_comment": "The wallpaper is still drawn here. Set this to false for a bare screen - it will then show Hyprland's misc:background_color, which is set to the scheme background in ~/.config/hypr/misc.lua."
+    "sidebar": {
+        "enabled": false
+    },
+    "utilities": {
+        "enabled": false
     }
 }

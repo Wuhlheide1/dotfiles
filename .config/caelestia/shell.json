@@ -18,6 +18,9 @@
             "showIcon": false,
             "showSeconds": false
         },
+        "excludedScreens": [
+            "HDMI-A-1"
+        ],
         "persistent": true,
         "popouts": {
             "tray": true
@@ -70,13 +73,14 @@
             "showWindows": false,
             "showWindowsOnSpecialWorkspaces": false,
             "shown": 6
-        },
-        "excludedScreens": [
-            "HDMI-A-1"
-        ]
+        }
     },
     "general": {
         "apps": {
+            "explorer": [
+                "nautilus",
+                "--new-window"
+            ],
             "terminal": [
                 "kitty"
             ]
@@ -111,9 +115,9 @@
     "services": {
         "clockFormat": "TwentyFourHour",
         "sensorUnits": "Celsius",
+        "smartScheme": false,
         "visualiserBars": 60,
-        "weatherUnits": "Celsius",
-        "smartScheme": false
+        "weatherUnits": "Celsius"
     },
     "utilities": {
         "quickToggles": [

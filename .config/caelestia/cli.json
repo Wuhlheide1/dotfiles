@@ -1,0 +1,6 @@
+{
+    "theme": {
+        "enableFuzzel": false,
+        "postHook": "pkill -USR1 -x kitty || true"
+    }
+}

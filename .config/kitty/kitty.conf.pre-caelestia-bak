@@ -1,0 +1,41 @@
+# Font — Nerd Font so fastfetch/powerline glyphs render
+font_family      JetBrainsMono Nerd Font Mono
+bold_font        auto
+italic_font      auto
+bold_italic_font auto
+font_size        11.0
+
+# Sensible defaults
+enable_audio_bell no
+
+# Fish in the terminal without touching the login shell (scripts stay bash).
+# Applies to newly opened kitty windows/tabs.
+shell fish
+
+# Copy: selecting text copies it immediately. Ctrl+C copies when a selection
+# exists, otherwise sends SIGINT as usual. (SUPER+C can't work here — Hyprland
+# grabs it globally for window-close before kitty ever sees it.)
+copy_on_select yes
+map ctrl+c copy_or_interrupt
+
+# Static neutral chrome (matugen no longer themes kitty — user preference).
+# Matches the quickshell surface palette but never changes with the wallpaper.
+foreground            #e7e5e8
+background            #131315
+cursor                #e7e5e8
+cursor_text_color     #131315
+selection_background  #3b3a40
+selection_foreground  #e7e5e8
+url_color             #7aa2f7
+
+active_tab_background   #27272b
+active_tab_foreground   #e7e5e8
+inactive_tab_background #1c1c1f
+inactive_tab_foreground #b6b4b9
+tab_bar_background      #131315
+
+# Slightly translucent; Hyprland's decoration blur kicks in automatically
+# for transparent windows, so this reads as frosted glass.
+background_opacity 0.93
+# lets a config reload (SIGUSR1) apply opacity changes to running windows
+dynamic_background_opacity yes
