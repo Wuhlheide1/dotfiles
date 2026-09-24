@@ -134,6 +134,14 @@ hl.bind(mainMod .. " + SHIFT + L", hl.dsp.exec_cmd("systemctl suspend"), { locke
 -- re-themes the whole shell (Caelestia generates the scheme from the image).
 hl.bind(mainMod .. " + SHIFT + W", hl.dsp.exec_cmd("caelestia wallpaper -r -N")) -- random wallpaper
 
+-- Timers. Caelestia has no timer of its own, so these use systemd transient
+-- timers for the timekeeping (accurate, survive a shell restart, listable with
+-- `systemctl --user list-timers`) and fire a normal notification, so the alert
+-- lands in the notification centre like anything else. Prompt accepts
+-- "10m tea", "1h30m", "90s", or a bare number meaning minutes.
+hl.bind(mainMod .. " + T", hl.dsp.exec_cmd("bash ~/.config/caelestia/scripts/timer.sh"))                 -- set a timer
+hl.bind(mainMod .. " + SHIFT + T", hl.dsp.exec_cmd("bash ~/.config/caelestia/scripts/timer.sh cancel"))  -- cancel a timer
+
 -- Clipboard history and emoji picker (fuzzel; pkill closes it if already open)
 hl.bind(mainMod .. " + V",       hl.dsp.exec_cmd("pkill fuzzel || caelestia clipboard"))
 hl.bind(mainMod .. " + ALT + V", hl.dsp.exec_cmd("pkill fuzzel || caelestia clipboard -d")) -- delete an entry
