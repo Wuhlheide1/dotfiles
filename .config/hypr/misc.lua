@@ -20,7 +20,10 @@ kb_model   = "jp106",
 -- sends) the Zenkaku_Hankaku keysym, so the E/J key left of 1 can reach fcitx5.
 -- Defined in ~/.config/xkb/{rules/evdev,symbols/custom}; stock xkb leaves that
 -- keycode with no usable keysym and inet(evdev) squats on it with F24.
-kb_options = "custom:zeha",
+-- custom:umlaut maps F13-F17 to ae/oe/ue/sz/euro, so the Wooting's Fn layer can
+-- bind a/o/u/s/e to those keycodes and type German without leaving the JIS
+-- layout. Defined in ~/.config/xkb/symbols/custom alongside zeha.
+kb_options = "custom:zeha,custom:umlaut",
 kb_rules   = "",
 
 follow_mouse = 1,
@@ -80,6 +83,22 @@ hl.config({
         -- easing, and it reads as a glitch next to everything else.
         animate_manual_resizes           = true,
         animate_mouse_windowdragging     = true,
+
+        -- No window swallowing, deliberately: its exception list can only
+        -- match the terminal's title, and Claude Code sets that to the session
+        -- name, so anything Claude launched would hide the Claude terminal.
+    },
+
+    cursor = {
+        -- The pointer disappears while you type and comes back on the next
+        -- mouse move, so it never sits on top of the text you're writing.
+        hide_on_key_press = true,
+    },
+
+    ecosystem = {
+        -- No "what's new" / donation windows popping up after an update.
+        no_update_news  = true,
+        no_donation_nag = true,
     },
 
     xwayland = {

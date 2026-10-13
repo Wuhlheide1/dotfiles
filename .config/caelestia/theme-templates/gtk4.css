@@ -1,0 +1,84 @@
+/* Rendered by ~/.config/caelestia/hooks/theme-post.py to
+ * ~/.local/state/caelestia/theme/gtk4.css; ~/.config/gtk-4.0/gtk.css symlinks here.
+ *
+ * libadwaita >= 1.6 styles everything through CSS variables, so the old
+ * @define-color names (all that Caelestia's own gtk.css sets) no longer reach
+ * Nautilus & co. Variables first, named colours after for plain GTK4 apps.
+ * GTK reads this once per process: an open window keeps its colours until
+ * the app restarts (Nautilus exits with its last window, so SUPER+E is fresh).
+ */
+
+:root {
+  --accent-color: #{{ primary.hex }};
+  --accent-bg-color: #{{ primary.hex }};
+  --accent-fg-color: #{{ onPrimary.hex }};
+
+  --destructive-color: #{{ error.hex }};
+  --destructive-bg-color: #{{ error.hex }};
+  --destructive-fg-color: #{{ onError.hex }};
+  --error-color: #{{ error.hex }};
+  --error-bg-color: #{{ error.hex }};
+  --error-fg-color: #{{ onError.hex }};
+  --success-color: #{{ ansiGreen.hex }};
+  --success-bg-color: #{{ ansiGreen.hex }};
+  --success-fg-color: #{{ surface.hex }};
+  --warning-color: #{{ ansiYellow.hex }};
+  --warning-bg-color: #{{ ansiYellow.hex }};
+  --warning-fg-color: #{{ surface.hex }};
+
+  --window-bg-color: #{{ surface.hex }};
+  --window-fg-color: #{{ onSurface.hex }};
+  --view-bg-color: #{{ surface.hex }};
+  --view-fg-color: #{{ onSurface.hex }};
+
+  --headerbar-bg-color: #{{ surface.hex }};
+  --headerbar-fg-color: #{{ onSurface.hex }};
+  --headerbar-backdrop-color: #{{ surface.hex }};
+  --headerbar-border-color: #{{ onSurface.hex }};
+
+  --sidebar-bg-color: #{{ surfaceContainerLow.hex }};
+  --sidebar-fg-color: #{{ onSurface.hex }};
+  --sidebar-backdrop-color: #{{ surfaceContainerLow.hex }};
+  --sidebar-border-color: #{{ outlineVariant.hex }};
+  --secondary-sidebar-bg-color: #{{ surfaceContainer.hex }};
+  --secondary-sidebar-fg-color: #{{ onSurface.hex }};
+  --secondary-sidebar-backdrop-color: #{{ surfaceContainer.hex }};
+  --secondary-sidebar-border-color: #{{ outlineVariant.hex }};
+
+  --card-bg-color: #{{ surfaceContainer.hex }};
+  --card-fg-color: #{{ onSurface.hex }};
+  --thumbnail-bg-color: #{{ surfaceContainerHigh.hex }};
+  --thumbnail-fg-color: #{{ onSurface.hex }};
+  --dialog-bg-color: #{{ surfaceContainerLow.hex }};
+  --dialog-fg-color: #{{ onSurface.hex }};
+  --popover-bg-color: #{{ surfaceContainerHigh.hex }};
+  --popover-fg-color: #{{ onSurface.hex }};
+  --overview-bg-color: #{{ surfaceContainerLow.hex }};
+  --overview-fg-color: #{{ onSurface.hex }};
+  --active-toggle-bg-color: #{{ surfaceContainerHighest.hex }};
+  --active-toggle-fg-color: #{{ onSurface.hex }};
+}
+
+@define-color accent_color #{{ primary.hex }};
+@define-color accent_bg_color #{{ primary.hex }};
+@define-color accent_fg_color #{{ onPrimary.hex }};
+@define-color destructive_color #{{ error.hex }};
+@define-color destructive_bg_color #{{ error.hex }};
+@define-color destructive_fg_color #{{ onError.hex }};
+@define-color success_color #{{ ansiGreen.hex }};
+@define-color warning_color #{{ ansiYellow.hex }};
+@define-color error_color #{{ error.hex }};
+@define-color window_bg_color #{{ surface.hex }};
+@define-color window_fg_color #{{ onSurface.hex }};
+@define-color view_bg_color #{{ surface.hex }};
+@define-color view_fg_color #{{ onSurface.hex }};
+@define-color headerbar_bg_color #{{ surface.hex }};
+@define-color headerbar_fg_color #{{ onSurface.hex }};
+@define-color sidebar_bg_color #{{ surfaceContainerLow.hex }};
+@define-color sidebar_fg_color #{{ onSurface.hex }};
+@define-color card_bg_color #{{ surfaceContainer.hex }};
+@define-color card_fg_color #{{ onSurface.hex }};
+@define-color dialog_bg_color #{{ surfaceContainerLow.hex }};
+@define-color dialog_fg_color #{{ onSurface.hex }};
+@define-color popover_bg_color #{{ surfaceContainerHigh.hex }};
+@define-color popover_fg_color #{{ onSurface.hex }};

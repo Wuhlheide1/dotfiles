@@ -1,0 +1,31 @@
+{
+  "name": "Caelestia",
+  "base": "{{ mode }}",
+  "overrides": {
+    "claude": "#{{ primary.hex }}",
+    "claudeShimmer": "#{{ primaryFixedDim.hex }}",
+    "clawd_body": "#{{ primary.hex }}",
+    "briefLabelClaude": "#{{ primary.hex }}",
+    "briefLabelYou": "#{{ tertiary.hex }}",
+    "permission": "#{{ tertiary.hex }}",
+    "permissionShimmer": "#{{ tertiaryFixedDim.hex }}",
+    "suggestion": "#{{ tertiary.hex }}",
+    "remember": "#{{ tertiary.hex }}",
+    "autoAccept": "#{{ secondary.hex }}",
+    "planMode": "#{{ ansiCyan.hex }}",
+    "promptBorder": "#{{ outline.hex }}",
+    "promptBorderShimmer": "#{{ outlineVariant.hex }}",
+    "text": "#{{ onSurface.hex }}",
+    "inverseText": "#{{ surface.hex }}",
+    "inactive": "#{{ outline.hex }}",
+    "subtle": "#{{ outlineVariant.hex }}",
+    "success": "#{{ ansiGreen.hex }}",
+    "error": "#{{ ansiRed.hex }}",
+    "warning": "#{{ ansiYellow.hex }}",
+    "userMessageBackground": "#{{ surfaceContainerHigh.hex }}",
+    "userMessageBackgroundHover": "#{{ surfaceContainerHighest.hex }}",
+    "selectionBg": "#{{ primaryContainer.hex }}",
+    "rate_limit_fill": "#{{ primary.hex }}",
+    "rate_limit_empty": "#{{ surfaceContainerHighest.hex }}"
+  }
+}

@@ -1,0 +1,49 @@
+/* Rendered by ~/.config/caelestia/hooks/theme-post.py to
+ * ~/.local/state/caelestia/theme/obsidian-caelestia.css and symlinked into the
+ * vault's .obsidian/snippets/. User-template syntax: {{ name.form }}.
+ * Enable under Settings > Appearance > CSS snippets (done once, already set). */
+.theme-dark {
+  --background-primary:        #{{ surface.hex }};
+  --background-primary-alt:    #{{ surfaceContainerLow.hex }};
+  --background-secondary:      #{{ surfaceContainer.hex }};
+  --background-secondary-alt:  #{{ surfaceContainerHigh.hex }};
+  --background-modifier-border:#{{ outlineVariant.hex }};
+  --background-modifier-hover: #{{ surfaceContainerHigh.hex }};
+
+  --text-normal:   #{{ onSurface.hex }};
+  --text-muted:    #{{ onSurfaceVariant.hex }};
+  --text-faint:    #{{ outline.hex }};
+  --text-accent:   #{{ primary.hex }};
+  --text-on-accent:#{{ onPrimary.hex }};
+  --text-selection:#{{ primary.hex }}40;
+  --text-highlight-bg: #{{ tertiary.hex }}55;
+
+  --interactive-accent:       #{{ primary.hex }};
+  --interactive-accent-hover: #{{ primaryDim.hex }};
+  --interactive-normal:       #{{ surfaceContainer.hex }};
+  --interactive-hover:        #{{ surfaceContainerHigh.hex }};
+
+  --h1-color: #{{ primary.hex }};
+  --h2-color: #{{ primary.hex }};
+  --h3-color: #{{ tertiary.hex }};
+  --h4-color: #{{ tertiary.hex }};
+  --h5-color: #{{ secondary.hex }};
+  --h6-color: #{{ secondary.hex }};
+
+  --link-color:        #{{ primary.hex }};
+  --link-color-hover:  #{{ tertiary.hex }};
+  --link-unresolved-color: #{{ error.hex }};
+
+  --code-background: #{{ surfaceContainerLow.hex }};
+  --code-normal:     #{{ onSurfaceVariant.hex }};
+  --blockquote-border-color: #{{ primary.hex }};
+
+  --titlebar-background: #{{ surface.hex }};
+  --titlebar-background-focused: #{{ surfaceContainer.hex }};
+  --divider-color: #{{ outlineVariant.hex }};
+  --scrollbar-thumb-bg: #{{ outline.hex }}55;
+  --graph-line: #{{ outline.hex }};
+  --graph-node: #{{ onSurface.hex }};
+  --graph-node-focused: #{{ primary.hex }};
+  --graph-node-tag: #{{ tertiary.hex }};
+}

@@ -10,7 +10,8 @@
     "bar": {
         "activeWindow": {
             "compact": true,
-            "inverted": false
+            "inverted": false,
+            "showOnHover": true
         },
         "clock": {
             "background": false,
@@ -25,7 +26,7 @@
         "popouts": {
             "tray": true
         },
-        "showOnHover": true,
+        "showOnHover": false,
         "statusIcons": [
             {
                 "enabled": true,
@@ -75,6 +76,10 @@
             "shown": 6
         }
     },
+    "dashboard": {
+        "dragThreshold": 45,
+        "showOnHover": true
+    },
     "general": {
         "apps": {
             "explorer": [
@@ -109,17 +114,38 @@
             ]
         }
     },
+    "launcher": {
+        "enableDangerousActions": true,
+        "showOnHover": false,
+        "useFuzzy": {
+            "actions": true,
+            "apps": true,
+            "schemes": true,
+            "variants": true,
+            "wallpapers": true
+        },
+        "vimKeybinds": false
+    },
     "paths": {
-        "wallpaperDir": "/home/wuhlheide/images/wallpapers"
+        "wallpaperDir": "/home/wuhlheide/Pictures/Wallpapers"
     },
     "services": {
         "clockFormat": "TwentyFourHour",
         "sensorUnits": "Celsius",
-        "smartScheme": false,
+        "smartScheme": true,
         "visualiserBars": 60,
         "weatherUnits": "Celsius"
     },
+    "sidebar": {
+        "enabled": true
+    },
     "utilities": {
+        "cards": {
+            "keepAwake": true,
+            "quickToggles": true,
+            "recorder": false
+        },
+        "enabled": false,
         "quickToggles": [
             {
                 "enabled": true,
@@ -149,6 +175,164 @@
                 "enabled": true,
                 "id": "vpn"
             }
-        ]
+        ],
+        "vpn": {
+            "enabled": false,
+            "provider": [
+                {
+                    "connectCmd": [
+                        "sudo",
+                        "-n",
+                        "/usr/local/bin/vpnctl",
+                        "up",
+                        "de-fra"
+                    ],
+                    "disconnectCmd": [
+                        "sudo",
+                        "-n",
+                        "/usr/local/bin/vpnctl",
+                        "down"
+                    ],
+                    "displayName": "Frankfurt",
+                    "id": "vpn-mv2v44ij-1ep67",
+                    "interface": "de-fra",
+                    "name": "wireguard"
+                },
+                {
+                    "connectCmd": [
+                        "sudo",
+                        "-n",
+                        "/usr/local/bin/vpnctl",
+                        "up",
+                        "de-ber"
+                    ],
+                    "disconnectCmd": [
+                        "sudo",
+                        "-n",
+                        "/usr/local/bin/vpnctl",
+                        "down"
+                    ],
+                    "displayName": "Berlin",
+                    "id": "vpn-mv2vj3u0-decjw",
+                    "interface": "de-ber",
+                    "name": "wireguard"
+                },
+                {
+                    "connectCmd": [
+                        "sudo",
+                        "-n",
+                        "/usr/local/bin/vpnctl",
+                        "up",
+                        "at-vie"
+                    ],
+                    "disconnectCmd": [
+                        "sudo",
+                        "-n",
+                        "/usr/local/bin/vpnctl",
+                        "down"
+                    ],
+                    "displayName": "Vienna",
+                    "id": "vpn-mv2vj3u1-cy22x",
+                    "interface": "at-vie",
+                    "name": "wireguard"
+                },
+                {
+                    "connectCmd": [
+                        "sudo",
+                        "-n",
+                        "/usr/local/bin/vpnctl",
+                        "up",
+                        "uk-lon"
+                    ],
+                    "disconnectCmd": [
+                        "sudo",
+                        "-n",
+                        "/usr/local/bin/vpnctl",
+                        "down"
+                    ],
+                    "displayName": "London",
+                    "id": "vpn-mv2vj3u2-dl6zb",
+                    "interface": "uk-lon",
+                    "name": "wireguard"
+                },
+                {
+                    "connectCmd": [
+                        "sudo",
+                        "-n",
+                        "/usr/local/bin/vpnctl",
+                        "up",
+                        "uk-edi"
+                    ],
+                    "disconnectCmd": [
+                        "sudo",
+                        "-n",
+                        "/usr/local/bin/vpnctl",
+                        "down"
+                    ],
+                    "displayName": "Edinburgh",
+                    "id": "vpn-mv2vj3u3-bj8j6",
+                    "interface": "uk-edi",
+                    "name": "wireguard"
+                },
+                {
+                    "connectCmd": [
+                        "sudo",
+                        "-n",
+                        "/usr/local/bin/vpnctl",
+                        "up",
+                        "lu-ste"
+                    ],
+                    "disconnectCmd": [
+                        "sudo",
+                        "-n",
+                        "/usr/local/bin/vpnctl",
+                        "down"
+                    ],
+                    "displayName": "Luxembourg",
+                    "id": "vpn-mv2vj3u4-5hag0",
+                    "interface": "lu-ste",
+                    "name": "wireguard"
+                },
+                {
+                    "connectCmd": [
+                        "sudo",
+                        "-n",
+                        "/usr/local/bin/vpnctl",
+                        "up",
+                        "us-nyc"
+                    ],
+                    "disconnectCmd": [
+                        "sudo",
+                        "-n",
+                        "/usr/local/bin/vpnctl",
+                        "down"
+                    ],
+                    "displayName": "New York",
+                    "id": "vpn-mv2vj3u5-zhy5p",
+                    "interface": "us-nyc",
+                    "name": "wireguard"
+                },
+                {
+                    "connectCmd": [
+                        "sudo",
+                        "-n",
+                        "/usr/local/bin/vpnctl",
+                        "up",
+                        "jp-tok"
+                    ],
+                    "disconnectCmd": [
+                        "sudo",
+                        "-n",
+                        "/usr/local/bin/vpnctl",
+                        "down"
+                    ],
+                    "displayName": "Tokyo",
+                    "id": "vpn-mv2vj3u6-d6gc1",
+                    "interface": "jp-tok",
+                    "name": "wireguard"
+                }
+            ],
+            "selectedProvider": "vpn-mv2v44ij-1ep67"
+        }
     }
 }

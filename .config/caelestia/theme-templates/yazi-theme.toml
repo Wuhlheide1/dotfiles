@@ -1,0 +1,84 @@
+# Rendered by ~/.config/caelestia/hooks/theme-post.py to ~/.local/state/caelestia/theme/yazi-theme.toml
+# ~/.config/yazi/theme.toml symlinks to it. User-template syntax: {{ name.form }}.
+# Section is [mgr] - renamed from [manager] in yazi 25.2.7; verified against 26.9.1.
+
+[mgr]
+cwd = { fg = "#{{ primary.hex }}" }
+hovered = { fg = "#{{ surface.hex }}", bg = "#{{ primary.hex }}" }
+preview_hovered = { underline = true }
+find_keyword = { fg = "#{{ tertiary.hex }}", bold = true }
+find_position = { fg = "#{{ secondary.hex }}", bg = "reset", bold = true }
+marker_copied = { fg = "#{{ ansi2.hex }}", bg = "#{{ ansi2.hex }}" }
+marker_cut = { fg = "#{{ error.hex }}", bg = "#{{ error.hex }}" }
+marker_marked = { fg = "#{{ tertiary.hex }}", bg = "#{{ tertiary.hex }}" }
+marker_selected = { fg = "#{{ primary.hex }}", bg = "#{{ primary.hex }}" }
+tab_active = { fg = "#{{ surface.hex }}", bg = "#{{ primary.hex }}" }
+tab_inactive = { fg = "#{{ onSurfaceVariant.hex }}", bg = "#{{ surfaceContainer.hex }}" }
+border_style = { fg = "#{{ outline.hex }}" }
+
+[mode]
+normal_main = { fg = "#{{ surface.hex }}", bg = "#{{ primary.hex }}", bold = true }
+normal_alt = { fg = "#{{ primary.hex }}", bg = "#{{ surfaceContainer.hex }}" }
+select_main = { fg = "#{{ surface.hex }}", bg = "#{{ ansi2.hex }}", bold = true }
+select_alt = { fg = "#{{ ansi2.hex }}", bg = "#{{ surfaceContainer.hex }}" }
+unset_main = { fg = "#{{ surface.hex }}", bg = "#{{ tertiary.hex }}", bold = true }
+unset_alt = { fg = "#{{ tertiary.hex }}", bg = "#{{ surfaceContainer.hex }}" }
+
+[status]
+overall = { fg = "#{{ onSurface.hex }}", bg = "#{{ surfaceContainer.hex }}" }
+sep_left = { open = "", close = "" }
+sep_right = { open = "", close = "" }
+
+[input]
+border = { fg = "#{{ primary.hex }}" }
+title = { fg = "#{{ onSurface.hex }}" }
+value = { fg = "#{{ onSurface.hex }}" }
+selected = { bg = "#{{ surfaceContainer.hex }}" }
+
+[pick]
+border = { fg = "#{{ primary.hex }}" }
+active = { fg = "#{{ tertiary.hex }}", bold = true }
+inactive = { fg = "#{{ onSurfaceVariant.hex }}" }
+
+[confirm]
+border = { fg = "#{{ primary.hex }}" }
+title = { fg = "#{{ primary.hex }}" }
+content = { fg = "#{{ onSurface.hex }}" }
+list = { fg = "#{{ onSurfaceVariant.hex }}" }
+btn_yes = { fg = "#{{ surface.hex }}", bg = "#{{ primary.hex }}", bold = true }
+btn_no = { fg = "#{{ onSurfaceVariant.hex }}" }
+
+[tasks]
+border = { fg = "#{{ primary.hex }}" }
+title = { fg = "#{{ onSurface.hex }}" }
+hovered = { fg = "#{{ tertiary.hex }}", underline = true }
+
+[which]
+mask = { bg = "#{{ surfaceContainer.hex }}" }
+cand = { fg = "#{{ primary.hex }}" }
+rest = { fg = "#{{ onSurfaceVariant.hex }}" }
+desc = { fg = "#{{ tertiary.hex }}" }
+separator_style = { fg = "#{{ outline.hex }}" }
+
+[notify]
+title_info = { fg = "#{{ ansi2.hex }}" }
+title_warn = { fg = "#{{ ansi3.hex }}" }
+title_error = { fg = "#{{ error.hex }}" }
+
+[help]
+on = { fg = "#{{ primary.hex }}" }
+run = { fg = "#{{ tertiary.hex }}" }
+desc = { fg = "#{{ onSurfaceVariant.hex }}" }
+hovered = { bg = "#{{ surfaceContainer.hex }}", bold = true }
+footer = { fg = "#{{ onSurface.hex }}", bg = "#{{ surfaceContainer.hex }}" }
+
+[filetype]
+rules = [
+  { mime = "image/*", fg = "#{{ ansi5.hex }}" },
+  { mime = "{audio,video}/*", fg = "#{{ ansi3.hex }}" },
+  { mime = "application/{,g}zip", fg = "#{{ ansi1.hex }}" },
+  { mime = "application/{tar,bzip*,7z-compressed,xz,rar}", fg = "#{{ ansi1.hex }}" },
+  { mime = "application/{pdf,doc,rtf}", fg = "#{{ ansi4.hex }}" },
+  { url = "*", fg = "#{{ onSurface.hex }}" },
+  { url = "*/", fg = "#{{ primary.hex }}" },
+]

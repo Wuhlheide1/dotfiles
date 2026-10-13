@@ -10,7 +10,11 @@
 -- The fallback keeps the config loadable before the first scheme is generated.
 local ok, c = pcall(require, "scheme.current")
 if not ok or type(c) ~= "table" then
-    c = { primary = "9ccbfb", onSurfaceVariant = "c8c5d1", shadow = "000000" }
+    c = {
+        primary = "9ccbfb", onPrimary = "003355", onSurfaceVariant = "c8c5d1",
+        surfaceContainerHigh = "282a2e", tertiary = "c3a7e8", onTertiary = "2e1a4a",
+        shadow = "000000",
+    }
 end
 
 -- Refer to https://wiki.hypr.land/Configuring/Basics/Variables/
@@ -94,6 +98,39 @@ hl.config({
 
     animations = {
         enabled = true,
+    },
+})
+
+-- Window groups (SUPER+, to group, ALT+TAB to cycle) in the scheme instead of
+-- Hyprland's default yellow: each tab is a rounded pill, the focused one in
+-- the accent; a locked group (SUPER+SHIFT+,) switches to the tertiary colour.
+hl.config({
+    group = {
+        col = {
+            border_active          = "rgba(" .. c.primary .. "e6)",
+            border_inactive        = "rgba(" .. c.onSurfaceVariant .. "22)",
+            border_locked_active   = "rgba(" .. c.tertiary .. "e6)",
+            border_locked_inactive = "rgba(" .. c.onSurfaceVariant .. "22)",
+        },
+        groupbar = {
+            font_family         = "Monaspace Argon",
+            font_size           = 11,
+            height              = 18,
+            gradients           = true,
+            rounding            = 9,
+            gradient_rounding   = 9,
+            indicator_height    = 0,
+            gaps_in             = 4,
+            text_color          = "rgb(" .. c.onPrimary .. ")",
+            text_color_inactive = "rgb(" .. c.onSurfaceVariant .. ")",
+            text_color_locked_active = "rgb(" .. c.onTertiary .. ")",
+            col = {
+                active          = "rgba(" .. c.primary .. "ff)",
+                inactive        = "rgba(" .. c.surfaceContainerHigh .. "ff)",
+                locked_active   = "rgba(" .. c.tertiary .. "ff)",
+                locked_inactive = "rgba(" .. c.surfaceContainerHigh .. "ff)",
+            },
+        },
     },
 })
 

@@ -1,0 +1,36 @@
+# Rendered by ~/.config/caelestia/hooks/theme-post.py; ~/.config/starship.toml
+# symlinks here. Starship re-reads it on every prompt, so the colours follow
+# the wallpaper live. Edit the TEMPLATE in ~/.config/caelestia/theme-templates.
+#
+# Deliberately quiet: directory, git, duration, prompt char.
+
+add_newline = true
+
+format = """
+$directory$git_branch$git_status$cmd_duration
+$character"""
+
+[directory]
+truncation_length = 4
+truncate_to_repo = true
+style = "bold #{{ primary.hex }}"
+read_only = " 󰌾"
+read_only_style = "#{{ ansiRed.hex }}"
+
+[git_branch]
+symbol = " "
+style = "#{{ onSurfaceVariant.hex }}"
+format = "on [$symbol$branch]($style) "
+
+[git_status]
+style = "#{{ ansiYellow.hex }}"
+
+[cmd_duration]
+min_time = 3000
+style = "#{{ outline.hex }}"
+format = "took [$duration]($style) "
+
+[character]
+success_symbol = "[❯](bold #{{ primary.hex }})"
+error_symbol = "[❯](bold #{{ ansiRed.hex }})"
+vimcmd_symbol = "[❮](bold #{{ tertiary.hex }})"

@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Caelestia",
+  "version": "1",
+  "description": "Brave theme rendered from the Caelestia scheme. Brave's vertical tabs paint the ACTIVE tile with background_tab and INACTIVE tiles with toolbar, so the active tab gets the accent-tinted container and inactive tabs sink into the strip.",
+  "theme": {
+    "colors": {
+      "frame": [{{ surface.red }}, {{ surface.green }}, {{ surface.blue }}],
+      "frame_inactive": [{{ surface.red }}, {{ surface.green }}, {{ surface.blue }}],
+      "toolbar": [{{ surfaceContainer.red }}, {{ surfaceContainer.green }}, {{ surfaceContainer.blue }}],
+      "background_tab": [{{ secondaryContainer.red }}, {{ secondaryContainer.green }}, {{ secondaryContainer.blue }}],
+      "background_tab_inactive": [{{ secondaryContainer.red }}, {{ secondaryContainer.green }}, {{ secondaryContainer.blue }}],
+      "tab_text": [{{ onSurface.red }}, {{ onSurface.green }}, {{ onSurface.blue }}],
+      "tab_background_text": [{{ onSurfaceVariant.red }}, {{ onSurfaceVariant.green }}, {{ onSurfaceVariant.blue }}],
+      "toolbar_text": [{{ onSurface.red }}, {{ onSurface.green }}, {{ onSurface.blue }}],
+      "toolbar_button_icon": [{{ onSurfaceVariant.red }}, {{ onSurfaceVariant.green }}, {{ onSurfaceVariant.blue }}],
+      "omnibox_background": [{{ surfaceContainerHigh.red }}, {{ surfaceContainerHigh.green }}, {{ surfaceContainerHigh.blue }}],
+      "omnibox_text": [{{ onSurface.red }}, {{ onSurface.green }}, {{ onSurface.blue }}],
+      "bookmark_text": [{{ onSurface.red }}, {{ onSurface.green }}, {{ onSurface.blue }}],
+      "ntp_background": [{{ surface.red }}, {{ surface.green }}, {{ surface.blue }}],
+      "ntp_text": [{{ onSurface.red }}, {{ onSurface.green }}, {{ onSurface.blue }}]
+    }
+  }
+}

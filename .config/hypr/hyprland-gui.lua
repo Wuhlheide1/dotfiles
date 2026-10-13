@@ -7,12 +7,6 @@ hl.env("XCURSOR_SIZE", "36")
 -- Settings
 hl.config({
     general = {
-        col = {
-            active_border = {
-                colors = {"rgba(b1c8ece6)"},
-                angle = 45,
-            },
-        },
         gaps_in = 4,
     },
     misc = {

@@ -36,6 +36,33 @@ usr_failed="$(systemctl --user --failed --no-legend --plain 2>/dev/null | awk '{
 [ -n "$sys_failed" ] && problems+=("failed system units: $(tr '\n' ' ' <<<"$sys_failed")")
 [ -n "$usr_failed" ] && problems+=("failed user units: $(tr '\n' ' ' <<<"$usr_failed")")
 
+# 4. packages with a published security fix that isn't installed yet
+if command -v arch-audit >/dev/null; then
+    vuln="$(arch-audit -u -q 2>/dev/null | tr '\n' ' ')"
+    [ -n "$vuln" ] && problems+=("security fixes waiting (paru -Syu): $vuln")
+fi
+
+# 5. Qt plugins on Qt's private API go silently wrong after a Qt minor bump
+#    (2026-10-09: qtengine stuck on 6.11 -> every tray/notif icon missing).
+qt_minor="$(pacman -Q qt6-base | grep -oP ' 6\.\K[0-9]+')"
+declare -A stale=()
+for f in /usr/lib/qt6/plugins/platformthemes/libqt6engine-plugin.so \
+         /usr/lib/qt6/qml/Caelestia/lib/*.so; do
+    [ -f "$f" ] || continue
+    built="$(objdump -T "$f" 2>/dev/null | grep -oP 'Qt_6\.\K[0-9]+' | sort -n | tail -1)"
+    [ -n "$built" ] && [ "$built" -lt "$qt_minor" ] && stale[$(pacman -Qqo "$f")]=1
+done
+[ ${#stale[@]} -gt 0 ] && problems+=("built for an older Qt, rebuild: paru -S --rebuild=yes ${!stale[*]}")
+
+# 6. Caelestia theme engine (~/.config/caelestia/hooks/theme-post.py): a step
+#    that crashed in the last day leaves some app on a stale palette.
+theme_log="$HOME/.local/state/caelestia/theme-post.log"
+if [ -f "$theme_log" ]; then
+    since="$(date -d '-24 hours' '+%F %T')"
+    failed="$(awk -v s="$since" '($1" "$2) >= s && $5 == "FAILED" {print $4}' "$theme_log" | sort -u | tr '\n' ' ')"
+    [ -n "$failed" ] && problems+=("theme engine step failed: ${failed}(details in $theme_log)")
+fi
+
 if [ ${#problems[@]} -gt 0 ]; then
     printf '%s\n' "${problems[@]}"
     notify-send -u critical "System health" "$(printf '%s\n' "${problems[@]}")" 2>/dev/null || true

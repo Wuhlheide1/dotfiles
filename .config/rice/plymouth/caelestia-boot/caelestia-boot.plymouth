@@ -1,0 +1,48 @@
+[Plymouth Theme]
+Name=Caelestia Boot
+Description=Continues the rEFInd "minimal" theme: Arch triangle on near-black with a slim accent spinner. Source: ~/.config/rice/plymouth/caelestia-boot
+ModuleName=two-step
+
+[two-step]
+Font=Adwaita Sans 12
+TitleFont=Adwaita Sans Light 30
+MonospaceFont=Adwaita Mono 12
+ImageDir=/usr/share/plymouth/themes/caelestia-boot
+DialogHorizontalAlignment=.5
+DialogVerticalAlignment=.382
+TitleHorizontalAlignment=.5
+TitleVerticalAlignment=.382
+HorizontalAlignment=.5
+VerticalAlignment=.62
+WatermarkHorizontalAlignment=.5
+WatermarkVerticalAlignment=.5
+Transition=none
+TransitionDuration=0.0
+BackgroundStartColor=0x050608
+BackgroundEndColor=0x050608
+ProgressBarBackgroundColor=0x14161b
+ProgressBarForegroundColor=0x5b8cff
+MessageBelowAnimation=true
+
+[boot-up]
+UseEndAnimation=false
+
+[shutdown]
+UseEndAnimation=false
+
+[reboot]
+UseEndAnimation=false
+
+[updates]
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+Title=Installing Updates...
+SubTitle=Do not turn off your computer
+
+[system-upgrade]
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+Title=Upgrading System...
+SubTitle=Do not turn off your computer

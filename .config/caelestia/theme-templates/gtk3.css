@@ -1,0 +1,45 @@
+/* Rendered by ~/.config/caelestia/hooks/theme-post.py to
+ * ~/.local/state/caelestia/theme/gtk3.css; ~/.config/gtk-3.0/gtk.css symlinks here.
+ * Base theme is adw-gtk3 / adw-gtk3-dark (switched with the scheme mode by the
+ * hook), which reads these libadwaita-style named colours.
+ */
+
+@define-color accent_color #{{ primary.hex }};
+@define-color accent_bg_color #{{ primary.hex }};
+@define-color accent_fg_color #{{ onPrimary.hex }};
+@define-color destructive_color #{{ error.hex }};
+@define-color destructive_bg_color #{{ error.hex }};
+@define-color destructive_fg_color #{{ onError.hex }};
+@define-color success_color #{{ ansiGreen.hex }};
+@define-color success_bg_color #{{ ansiGreen.hex }};
+@define-color warning_color #{{ ansiYellow.hex }};
+@define-color warning_bg_color #{{ ansiYellow.hex }};
+@define-color error_color #{{ error.hex }};
+@define-color error_bg_color #{{ error.hex }};
+
+@define-color window_bg_color #{{ surface.hex }};
+@define-color window_fg_color #{{ onSurface.hex }};
+@define-color view_bg_color #{{ surface.hex }};
+@define-color view_fg_color #{{ onSurface.hex }};
+@define-color headerbar_bg_color #{{ surface.hex }};
+@define-color headerbar_fg_color #{{ onSurface.hex }};
+@define-color headerbar_backdrop_color #{{ surface.hex }};
+@define-color sidebar_bg_color #{{ surfaceContainerLow.hex }};
+@define-color sidebar_fg_color #{{ onSurface.hex }};
+@define-color sidebar_backdrop_color #{{ surfaceContainerLow.hex }};
+@define-color card_bg_color #{{ surfaceContainer.hex }};
+@define-color card_fg_color #{{ onSurface.hex }};
+@define-color dialog_bg_color #{{ surfaceContainerLow.hex }};
+@define-color dialog_fg_color #{{ onSurface.hex }};
+@define-color popover_bg_color #{{ surfaceContainerHigh.hex }};
+@define-color popover_fg_color #{{ onSurface.hex }};
+@define-color thumbnail_bg_color #{{ surfaceContainerHigh.hex }};
+@define-color thumbnail_fg_color #{{ onSurface.hex }};
+
+/* Legacy names some older GTK3 apps still use. */
+@define-color theme_bg_color @window_bg_color;
+@define-color theme_fg_color @window_fg_color;
+@define-color theme_base_color @view_bg_color;
+@define-color theme_text_color @view_fg_color;
+@define-color theme_selected_bg_color @accent_bg_color;
+@define-color theme_selected_fg_color @accent_fg_color;

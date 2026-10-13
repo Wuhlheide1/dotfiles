@@ -1,6 +1,11 @@
 {
     "theme": {
         "enableFuzzel": false,
-        "postHook": "bash ~/.config/caelestia/hooks/theme-post.sh"
+        "postHook": "python3 ~/.config/caelestia/hooks/theme-post.py",
+        "enableGtk": false,
+        "enableTerm": false,
+        "iconThemeDark": "Caelestia-Dark",
+        "iconThemeLight": "Caelestia-Light",
+        "enableChromium": false
     }
 }
