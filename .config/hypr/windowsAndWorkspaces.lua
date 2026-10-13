@@ -86,7 +86,7 @@ hl.window_rule({
 -- what the upstream Caelestia Hyprland config ships.
 hl.layer_rule({
     name  = "caelestia-no-anim",
-    match = { namespace = "caelestia-(border-exclusion|area-picker)" },
+    match = { namespace = "caelestia-(border-exclusion|area-picker|circle)" },
     no_anim = true,
 })
 hl.layer_rule({

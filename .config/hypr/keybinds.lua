@@ -163,6 +163,11 @@ hl.bind(mainMod .. " + SHIFT + ALT + R", hl.dsp.exec_cmd("caelestia record -r"))
 
 hl.bind(mainMod .. " + SHIFT + C", hl.dsp.exec_cmd("hyprpicker -a")) -- colour picker
 
+-- Circle to Search (~/.config/quickshell/circle): freeze the screen, circle or
+-- tap something, then ask Claude, Google Lens it, pull its text or translate.
+-- A second press closes it.
+hl.bind(mainMod .. " + G", hl.dsp.exec_cmd("qs -c circle ipc call circle toggle"))
+
 -----------------------------
 ---- MEDIA & HARDWARE KEYS --
 -----------------------------

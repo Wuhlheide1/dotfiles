@@ -20,6 +20,11 @@ hl.on("hyprland.start", function()
     -- Caelestia does the lot. Restart it by hand with `caelestia shell -r`.
     hl.exec_cmd("caelestia shell -d")
 
+    -- Circle to Search overlay (SUPER+G). Its own quickshell config, kept
+    -- resident so the screen freezes instantly; it themes itself from
+    -- Caelestia's scheme.json.
+    hl.exec_cmd("qs -c circle -d")
+
     -- Clipboard history: watch selections and store them for SUPER+V, which
     -- hands the same cliphist database to Caelestia's fuzzel picker.
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
@@ -33,7 +38,6 @@ hl.on("hyprland.start", function()
 
     -- Phone integration (KDE Connect protocol) running headless in the background.
     -- NOTE: kdeconnect(d) must NOT run at the same time - both want port 1716.
-    hl.exec_cmd("valent --gapplication-service")
 
     -- Forward the play/pause/skip buttons on Bluetooth headphones to MPRIS, so
     -- the XM5's controls drive whatever is playing.

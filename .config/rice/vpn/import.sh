@@ -42,7 +42,8 @@ city_name() {
         mia) echo Miami ;;       sea) echo Seattle ;;     atl) echo Atlanta ;;
         buh) echo Bucharest ;;   bud) echo Budapest ;;    sof) echo Sofia ;;
         ath) echo Athens ;;      ist) echo Istanbul ;;    hkg) echo "Hong Kong" ;;
-        sel) echo Seoul ;;       *) echo "${1^^}" ;;
+        sel) echo Seoul ;;       ste) echo Luxembourg ;;
+        edi) echo Edinburgh ;;   *) echo "${1^^}" ;;
     esac
 }
 
@@ -74,6 +75,14 @@ for f in "$@"; do
         grep -v -E '^#[[:space:]]*(label|country):' "$f"
     } > "$dst"
 
+    # IPv6 leak guard: Surfshark configs may route only 0.0.0.0/0, which lets
+    # IPv6 (Telekom gives this line a global v6 address) bypass the tunnel.
+    # Routing ::/0 into the tunnel blackholes it instead; apps fall back to v4.
+    if ! grep -qE '^AllowedIPs.*::/0' "$dst"; then
+        sed -i -E 's|^(AllowedIPs[[:space:]]*=.*)$|\1, ::/0|' "$dst"
+        echo "  + routed IPv6 into the tunnel (was IPv4-only)"
+    fi
+
     chown root:root "$dst"; chmod 0600 "$dst"
     echo "installed $name  ($label · $country)"
     n=$((n+1))
@@ -81,4 +90,4 @@ done
 
 echo
 echo "$n tunnel(s) installed in $DEST"
-[ "$n" -gt 0 ] && echo "Open the ControlCenter -> VPN; they are listed by latency."
+[ "$n" -gt 0 ] && echo "Compare speeds with: vpn-speed -a"
