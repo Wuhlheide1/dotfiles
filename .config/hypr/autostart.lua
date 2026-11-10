@@ -19,11 +19,17 @@ hl.on("hyprland.start", function()
     -- screen and idle handling - hypridle/hyprlock/awww/matugen are all gone,
     -- Caelestia does the lot. Restart it by hand with `caelestia shell -r`.
     hl.exec_cmd("caelestia shell -d")
+    -- Restarts the shell and re-locks if it crashes (see the script).
+    hl.exec_cmd("~/.config/caelestia/scripts/shell-guard.sh")
 
     -- Circle to Search overlay (SUPER+G). Its own quickshell config, kept
     -- resident so the screen freezes instantly; it themes itself from
     -- Caelestia's scheme.json.
     hl.exec_cmd("qs -c circle -d")
+
+    -- Spotify lyrics floating over games (SUPER+Y hides them). Also its own
+    -- quickshell config; nothing is mapped until a game and a lyric line are.
+    hl.exec_cmd("qs -c lyrics -d")
 
     -- Clipboard history: watch selections and store them for SUPER+V, which
     -- hands the same cliphist database to Caelestia's fuzzel picker.

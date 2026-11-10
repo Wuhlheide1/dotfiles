@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Copy the XM5 link key Windows made into BlueZ, so one pairing works in both OSes.
+# Windows drive is mounted READ-ONLY; nothing on it is changed.
+set -euo pipefail
+[[ $EUID -eq 0 ]] || { echo "run with sudo"; exit 1; }
+
+ADAPTER=F4:4E:FC:CB:3B:BB
+DEVICE=AC:80:0A:91:EB:E7
+WINPART=/dev/nvme0n1p2
+LOG=/tmp/xm5-import.log
+exec > >(tee "$LOG") 2>&1
+
+lc() { tr -d : <<<"${1,,}"; }
+work=$(mktemp -d); mnt=$work/win
+cleanup() { mountpoint -q "$mnt" && umount "$mnt"; rm -rf "$work"; }
+trap cleanup EXIT
+
+pacman -S --needed --noconfirm chntpw
+
+mkdir "$mnt"
+mount -t ntfs3 -o ro "$WINPART" "$mnt"
+hive=$(find "$mnt" -maxdepth 4 -ipath '*/windows/system32/config/system' -type f | head -1)
+[[ -n $hive ]] || { echo "SYSTEM hive not found on $WINPART"; exit 1; }
+cp "$hive" "$work/SYSTEM"
+echo "hive: $hive"
+
+# Which ControlSet is live
+reged -x "$work/SYSTEM" 'HKEY_LOCAL_MACHINE\SYSTEM' '\Select' "$work/select.reg" >/dev/null || true
+cur=$(grep -i '^"Current"=dword:' "$work/select.reg" | sed 's/.*dword://; s/\r//')
+[[ -n $cur ]] || { echo "could not read Select\\Current"; exit 1; }
+cs=$(printf 'ControlSet%03d' "$((16#$cur))")
+echo "control set: $cs"
+
+reged -x "$work/SYSTEM" 'HKEY_LOCAL_MACHINE\SYSTEM' "\\$cs\\Services\\BTHPORT\\Parameters\\Keys" "$work/keys.reg" >/dev/null || true
+[[ -s $work/keys.reg ]] || { echo "no BTHPORT Keys in $cs (never paired anything in Windows?)"; exit 1; }
+# join "\"-continued lines, drop CRs
+sed -e 's/\r//' "$work/keys.reg" | sed -e ':a' -e '/\\$/N; s/\\\n *//; ta' > "$work/keys.flat"
+echo "--- adapters/devices Windows has keys for:"
+grep -iE '^\[|^"[0-9a-f]{12}"=' "$work/keys.flat" | sed 's/=hex:.*/=<key>/'
+
+key=$(awk -v a="$(lc $ADAPTER)" -v d="$(lc $DEVICE)" '
+  /^\[/ { insec = (tolower($0) ~ "\\\\" a "\\]$") }
+  insec && tolower($0) ~ "^\"" d "\"=hex:" { sub(/^[^:]*:/, ""); gsub(/,/, ""); print toupper($0) }
+' "$work/keys.flat")
+[[ $key =~ ^[0-9A-F]{32}$ ]] || { echo "No XM5 key for adapter $ADAPTER in the Windows registry"; exit 1; }
+echo "found XM5 link key (${#key} hex chars)"
+
+dir=/var/lib/bluetooth/$ADAPTER/$DEVICE
+systemctl stop bluetooth
+[[ -f $dir/info ]] && cp "$dir/info" "$work/info.old" && echo "old info file existed (replaced)"
+mkdir -p "$dir"
+cat > "$dir/info" <<EOF
+[General]
+Name=WH-1000XM5
+Class=0x240404
+SupportedTechnologies=BR/EDR;
+Trusted=true
+Blocked=false
+Services=00001108-0000-1000-8000-00805f9b34fb;0000110b-0000-1000-8000-00805f9b34fb;0000110c-0000-1000-8000-00805f9b34fb;0000110d-0000-1000-8000-00805f9b34fb;0000110e-0000-1000-8000-00805f9b34fb;0000110f-0000-1000-8000-00805f9b34fb;0000111e-0000-1000-8000-00805f9b34fb;00001131-0000-1000-8000-00805f9b34fb;
+
+[LinkKey]
+Key=$key
+Type=7
+PINLength=0
+EOF
+chmod 600 "$dir/info"
+systemctl start bluetooth
+sleep 2
+echo "--- bluez now says:"
+bluetoothctl info "$DEVICE" | grep -E 'Name|Paired|Bonded|Trusted|Connected'
+echo DONE

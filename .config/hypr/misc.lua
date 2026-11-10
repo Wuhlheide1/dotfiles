@@ -23,7 +23,9 @@ kb_model   = "jp106",
 -- custom:umlaut maps F13-F17 to ae/oe/ue/sz/euro, so the Wooting's Fn layer can
 -- bind a/o/u/s/e to those keycodes and type German without leaving the JIS
 -- layout. Defined in ~/.config/xkb/symbols/custom alongside zeha.
-kb_options = "custom:zeha,custom:umlaut",
+-- custom:fkeys gives F18 its real keysym (inet(evdev) makes it XF86Launch9) for
+-- the Basilisk's two top buttons, which the razer daemon sends as F18/F19.
+kb_options = "custom:zeha,custom:umlaut,custom:fkeys",
 kb_rules   = "",
 
 follow_mouse = 1,
@@ -52,6 +54,14 @@ natural_scroll = false,
     },
 })
 
+-- Basilisk V4 Pro: no libinput acceleration on top of the sensor, so DPI
+-- alone sets the speed (DPI and its stages live on the mouse: `razer dpi`,
+-- `razer stages`). The "-mouse" node is its second pointer interface, used
+-- only by on-mouse macros; flat too, so both move the same way.
+for _, name in ipairs({ "razer-razer-basilisk-v4-pro", "razer-razer-basilisk-v4-pro-mouse" }) do
+    hl.device({ name = name, accel_profile = "flat" })
+end
+
 -- Warp the mouse cursor onto a workspace's monitor when switching to it,
 -- so the pointer follows your focus across monitors.
 hl.config({
@@ -77,6 +87,12 @@ hl.config({
         -- "open in existing window" from the browser) instead of just marking
         -- the workspace urgent.
         focus_on_activate         = true,
+
+        -- If the lock screen's client dies (the Caelestia shell crashing while
+        -- locked), let a new one take over instead of leaving the red "go to
+        -- a TTY" screen. caelestia/scripts/shell-guard.sh restarts the shell
+        -- and locks again.
+        allow_session_lock_restore = true,
 
         -- Animate manual resizes and mouse drags; without these, dragging a
         -- window is the one interaction on the desktop that snaps instead of

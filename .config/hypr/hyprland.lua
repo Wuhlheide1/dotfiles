@@ -9,6 +9,7 @@ require("lookAndFeel")
 require("misc")
 require("keybinds")
 require("windowsAndWorkspaces")
+require("joycons")
 
 -- The desktop shell is Caelestia (caelestia-shell, from the AUR). It is
 -- installed system-wide at /etc/xdg/quickshell/caelestia and is NOT part of

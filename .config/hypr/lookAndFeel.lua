@@ -27,7 +27,7 @@ hl.config({
         gaps_in  = 5,
         gaps_out = 10,
 
-        border_size = 2,
+        border_size = 1,
 
         col = {
             -- Follows the wallpaper: `caelestia scheme` rewrites
@@ -81,8 +81,12 @@ hl.config({
 
         blur = {
             enabled           = true,
-            size              = 8,
-            passes            = 2,
+            -- kitty is the main translucent window (background_opacity 0.85,
+            -- ~/.config/kitty/kitty.conf). 3 smaller passes melt the wallpaper
+            -- into soft colour with no shapes left behind the text; 2 x 8 left
+            -- tree trunks and edges readable through it (2026-11-07).
+            size              = 6,
+            passes            = 3,
             vibrancy          = 0.1696,
             new_optimizations = true,
 
@@ -142,10 +146,10 @@ hl.curve("almostLinear",   { type = "bezier", points = { {0.5, 0.5},   {0.75, 1}
 hl.curve("quick",          { type = "bezier", points = { {0.15, 0},    {0.1, 1}     } })
 
 -- Default springs
-hl.curve("easy",           { type = "spring", mass = 1, stiffness = 71.2633, dampening = 15.8273644 })
+hl.curve("easy",           { type = "spring", mass = 1, stiffness = 71.2633, damping = 15.8273644 })
 -- Snappy near-critical spring for window open + tile-reflow: ~250ms settle with
 -- a touch of life, vs "easy"'s soft ~500ms wobble that made open/close feel slow.
-hl.curve("snappy",         { type = "spring", mass = 1, stiffness = 350, dampening = 32 })
+hl.curve("snappy",         { type = "spring", mass = 1, stiffness = 350, damping = 32 })
 
 hl.animation({ leaf = "global",        enabled = true,  speed = 10,   bezier = "default" })
 hl.animation({ leaf = "border",        enabled = true,  speed = 5.39, bezier = "easeOutQuint" })

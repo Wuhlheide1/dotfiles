@@ -1,0 +1,7 @@
+#!/bin/sh
+# wait-uptime SECONDS: sleep until the PC has been up that long, then exit.
+# Used by backup.service (drop-in 20-gentle.conf) so the daily catch-up does
+# not run right at login.
+want=${1:?usage: wait-uptime SECONDS}
+up=$(cut -d. -f1 /proc/uptime)
+[ "$up" -ge "$want" ] || sleep "$((want - up))"

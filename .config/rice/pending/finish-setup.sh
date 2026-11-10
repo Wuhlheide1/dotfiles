@@ -38,7 +38,9 @@ d.setdefault("theme", {})["enableChromium"] = False
 p.write_text(json.dumps(d, indent=4) + "\n")
 PY
     flag="--load-extension=$HOME/.local/share/caelestia-brave-theme"
-    grep -qxF -- "$flag" ~/.config/brave-flags.conf 2>/dev/null || {
+    # Already in the (comma-separated) flag line? A second --load-extension line
+    # would replace the first one and drop the YouTube/Gemini/Mood extensions.
+    grep -qF -- "caelestia-brave-theme" ~/.config/brave-flags.conf 2>/dev/null || {
         printf '\n# Caelestia theme (manifest re-rendered on every scheme change;\n# Brave reads it at startup).\n%s\n' "$flag" >> ~/.config/brave-flags.conf
     }
     echo "   done."

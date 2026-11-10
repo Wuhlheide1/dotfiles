@@ -61,7 +61,47 @@ if [ -f "$theme_log" ]; then
     since="$(date -d '-24 hours' '+%F %T')"
     failed="$(awk -v s="$since" '($1" "$2) >= s && $5 == "FAILED" {print $4}' "$theme_log" | sort -u | tr '\n' ' ')"
     [ -n "$failed" ] && problems+=("theme engine step failed: ${failed}(details in $theme_log)")
+    # Spicetify refuses to refresh after a Spotify/Spicetify update; that is
+    # logged as text, not as FAILED (it went unnoticed for 2 weeks in October).
+    awk -v s="$since" '($1" "$2) >= s && /spotify: refresh failed/' "$theme_log" | grep -q . &&
+        problems+=("Spotify theme stuck: spicetify -n restore backup apply")
 fi
+
+# --- Added 2026-11-10 (audit). Quiet on purpose: everything below reports a
+# --- thing once, or at most once a week, and never as a critical popup.
+notes=()
+state="$HOME/.local/state/health-check"
+mkdir -p "$state"
+
+# 7. Caelestia's `dynamic oled` overlay is a link in Python's user site-packages.
+#    A Python minor update (3.14 -> 3.15) moves that folder, the link is gone and
+#    the flavour falls back to stock without an error. This one is a real breakage.
+overlay="$(python3 -c 'import caelestia, os; print(os.path.realpath(caelestia.__file__))' 2>/dev/null)"
+case "$overlay" in
+    "$HOME/.config/caelestia/cli-overlay/"*) ;;
+    *) problems+=("Caelestia overlay not loaded by $(python3 -V 2>&1): ln -s ~/.config/caelestia/cli-overlay $(python3 -c 'import site; print(site.getusersitepackages())')/caelestia") ;;
+esac
+
+# 8. New .pacnew/.pacsave files: each one is mentioned once (merge: sudo pacdiff).
+if command -v pacdiff >/dev/null; then
+    pacdiff -o 2>/dev/null | sort > "$state/pacnew.now"
+    new="$(comm -23 "$state/pacnew.now" "$state/pacnew.seen" 2>/dev/null || cat "$state/pacnew.now")"
+    mv "$state/pacnew.now" "$state/pacnew.seen"
+    [ -n "$new" ] && notes+=("new config versions to merge (sudo pacdiff): $(tr '\n' ' ' <<<"$new")")
+fi
+
+# 9. Dotfiles: changes waiting and no commit for 14 days -> a reminder, max once a week.
+dot=(git --git-dir="$HOME/.dotfiles" --work-tree="$HOME")
+if last="$("${dot[@]}" log -1 --format=%ct 2>/dev/null)"; then
+    dirty="$("${dot[@]}" status --porcelain --untracked-files=no 2>/dev/null | wc -l)"
+    age=$(( ($(date +%s) - last) / 86400 ))
+    if [ "$dirty" -gt 0 ] && [ "$age" -ge 14 ] && [ -z "$(find "$state/dotfiles.reminded" -mtime -7 2>/dev/null)" ]; then
+        notes+=("dotfiles: $dirty changed files, last commit $age days ago (dotfiles add -u; dotfiles commit; dotfiles push)")
+        touch "$state/dotfiles.reminded"
+    fi
+fi
+
+[ ${#notes[@]} -gt 0 ] && { printf '%s\n' "${notes[@]}"; notify-send "System notes" "$(printf '%s\n' "${notes[@]}")" 2>/dev/null || true; }
 
 if [ ${#problems[@]} -gt 0 ]; then
     printf '%s\n' "${problems[@]}"

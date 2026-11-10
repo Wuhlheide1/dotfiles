@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+r"""Align markdown tables in place: pad cells by display width (CJK = 2),
+keep \| escapes, rebuild separator rows as dashes. Usage: md-table-align FILE..."""
+import re
+import sys
+import unicodedata
+
+
+def width(s):
+    return sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in s)
+
+
+def split_row(line):
+    cells = re.split(r"(?<!\\)\|", line.strip())
+    return [c.strip() for c in cells[1:-1]]
+
+
+def is_sep(cells):
+    return all(re.fullmatch(r":?-+:?", c) for c in cells if c)
+
+
+def fmt(block):
+    rows = [split_row(l) for l in block]
+    n = max(len(r) for r in rows)
+    rows = [r + [""] * (n - len(r)) for r in rows]
+    w = [max(max(width(r[i]) for r in rows if not is_sep(r)), 3) for i in range(n)]
+    out = []
+    for r in rows:
+        if is_sep(r):
+            out.append("| " + " | ".join("-" * w[i] for i in range(n)) + " |")
+        else:
+            out.append("| " + " | ".join(r[i] + " " * (w[i] - width(r[i])) for i in range(n)) + " |")
+    return out
+
+
+for path in sys.argv[1:]:
+    lines = open(path, encoding="utf-8").read().split("\n")
+    res, block = [], []
+    for l in lines + [None]:
+        if l is not None and l.lstrip().startswith("|"):
+            block.append(l)
+            continue
+        if block:
+            res.extend(fmt(block))
+            block = []
+        if l is not None:
+            res.append(l)
+    open(path, "w", encoding="utf-8").write("\n".join(res))

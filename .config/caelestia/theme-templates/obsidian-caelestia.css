@@ -8,7 +8,7 @@
   --background-secondary:      #{{ surfaceContainer.hex }};
   --background-secondary-alt:  #{{ surfaceContainerHigh.hex }};
   --background-modifier-border:#{{ outlineVariant.hex }};
-  --background-modifier-hover: #{{ surfaceContainerHigh.hex }};
+  --background-modifier-hover: #{{ raisedHigh.hex }};
 
   --text-normal:   #{{ onSurface.hex }};
   --text-muted:    #{{ onSurfaceVariant.hex }};
@@ -21,7 +21,7 @@
   --interactive-accent:       #{{ primary.hex }};
   --interactive-accent-hover: #{{ primaryDim.hex }};
   --interactive-normal:       #{{ surfaceContainer.hex }};
-  --interactive-hover:        #{{ surfaceContainerHigh.hex }};
+  --interactive-hover:        #{{ raisedHigh.hex }};
 
   --h1-color: #{{ primary.hex }};
   --h2-color: #{{ primary.hex }};

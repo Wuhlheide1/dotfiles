@@ -59,7 +59,10 @@
         ],
         "tray": {
             "background": true,
-            "compact": true,
+            "compact": false,
+            "hiddenIcons": [
+                "Galaxy Buds"
+            ],
             "recolour": true
         },
         "workspaces": {
@@ -104,6 +107,18 @@
                 },
                 {
                     "enabled": true,
+                    "idleAction": [
+                        "/home/wuhlheide/.local/bin/vault",
+                        "lock",
+                        "--quiet"
+                    ],
+                    "inhibitWhenAudio": false,
+                    "inhibitWhenCharging": false,
+                    "respectInhibitors": true,
+                    "timeout": 300
+                },
+                {
+                    "enabled": true,
                     "idleAction": "dpms off",
                     "inhibitWhenAudio": false,
                     "inhibitWhenCharging": false,
@@ -125,6 +140,9 @@
             "wallpapers": true
         },
         "vimKeybinds": false
+    },
+    "osd": {
+        "enableMicrophone": true
     },
     "paths": {
         "wallpaperDir": "/home/wuhlheide/Pictures/Wallpapers"
@@ -334,5 +352,8 @@
             ],
             "selectedProvider": "vpn-mv2v44ij-1ep67"
         }
+    },
+    "lock": {
+        "hideNotifs": true
     }
 }

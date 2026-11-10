@@ -1,0 +1,13 @@
+[Unit]
+Description=Vault watcher: locks ~/.vault before sleep and when nothing uses it any more
+Documentation=file://%h/.local/bin/vault
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/vault watch
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

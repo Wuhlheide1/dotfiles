@@ -33,7 +33,7 @@ sep_right = { open = "", close = "" }
 border = { fg = "#{{ primary.hex }}" }
 title = { fg = "#{{ onSurface.hex }}" }
 value = { fg = "#{{ onSurface.hex }}" }
-selected = { bg = "#{{ surfaceContainer.hex }}" }
+selected = { bg = "#{{ raised.hex }}" }
 
 [pick]
 border = { fg = "#{{ primary.hex }}" }
@@ -69,7 +69,7 @@ title_error = { fg = "#{{ error.hex }}" }
 on = { fg = "#{{ primary.hex }}" }
 run = { fg = "#{{ tertiary.hex }}" }
 desc = { fg = "#{{ onSurfaceVariant.hex }}" }
-hovered = { bg = "#{{ surfaceContainer.hex }}", bold = true }
+hovered = { bg = "#{{ raised.hex }}", bold = true }
 footer = { fg = "#{{ onSurface.hex }}", bg = "#{{ surfaceContainer.hex }}" }
 
 [filetype]

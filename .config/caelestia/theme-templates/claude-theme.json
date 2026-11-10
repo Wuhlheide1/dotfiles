@@ -22,10 +22,10 @@
     "success": "#{{ ansiGreen.hex }}",
     "error": "#{{ ansiRed.hex }}",
     "warning": "#{{ ansiYellow.hex }}",
-    "userMessageBackground": "#{{ surfaceContainerHigh.hex }}",
-    "userMessageBackgroundHover": "#{{ surfaceContainerHighest.hex }}",
+    "userMessageBackground": "#{{ raisedHigh.hex }}",
+    "userMessageBackgroundHover": "#{{ raisedHighest.hex }}",
     "selectionBg": "#{{ primaryContainer.hex }}",
     "rate_limit_fill": "#{{ primary.hex }}",
-    "rate_limit_empty": "#{{ surfaceContainerHighest.hex }}"
+    "rate_limit_empty": "#{{ raisedHighest.hex }}"
   }
 }

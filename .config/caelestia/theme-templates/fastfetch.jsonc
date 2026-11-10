@@ -1,15 +1,20 @@
 // Rendered by ~/.config/caelestia/hooks/theme-post.py; ~/.config/fastfetch/config.jsonc
 // symlinks here. Edit the TEMPLATE in ~/.config/caelestia/theme-templates/.
-// Colours follow the wallpaper: keys in the accent, rules in the outline grey.
+// Kazuha theme (2026-10-14): fixed palette taken from the karuta-panorama art,
+// so it does NOT follow the wallpaper. Keys turn crimson -> scarlet -> amber
+// like momiji down the list. Old wallpaper-following template:
+// fastfetch.jsonc.pre-kazuha-bak next to this file.
 {
     "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
 
     "logo": {
-        "source": "~/.config/fastfetch/fast-images/hypr.png",
+        "source": "~/.config/fastfetch/fast-images/kazuha.png",
         "type": "kitty-direct",
-        // box sized to her true 2526x4096 ratio so she isn't stretched.
+        // Kazuha cut out of Pictures/Wallpapers/karuta-panorama.jpg, outlined (800x881).
+        // kitty-direct stretches to the box, so the box carries her ratio:
+        // 40 cols x 20 rows at Monaspace's ~0.45 cell aspect = 0.91.
         "width": 40,
-        "height": 30,
+        "height": 20,
         "preserveAspectRatio": true,
         "padding": { "top": 2, "right": 4 }
     },
@@ -18,46 +23,51 @@
         "separator": "   ",
         "key": { "width": 15 },
         "color": {
-            "keys": "38;2;{{ primary.red }};{{ primary.green }};{{ primary.blue }}",
-            "title": "1;38;2;{{ primary.red }};{{ primary.green }};{{ primary.blue }}",
-            "output": "38;2;{{ onSurface.red }};{{ onSurface.green }};{{ onSurface.blue }}",
-            "separator": "38;2;{{ outline.red }};{{ outline.green }};{{ outline.blue }}"
+            "keys": "38;2;216;52;63",
+            "title": "1;38;2;244;207;92",
+            "output": "38;2;241;231;220",
+            "separator": "38;2;140;123;118"
         }
     },
 
     "modules": [
         "break",
-        { "type": "custom", "format": "\u001b[1;38;2;{{ primary.red }};{{ primary.green }};{{ primary.blue }}mArchlinux\u001b[0;38;2;{{ outline.red }};{{ outline.green }};{{ outline.blue }}m  ·  {{ mode }}" },
-        { "type": "custom", "format": "\u001b[38;2;{{ outline.red }};{{ outline.green }};{{ outline.blue }}m──────────────────────" },
+        { "type": "custom", "format": "\u001b[0;38;2;244;207;92m\uDB83\uDC93  \u001b[0;1;38;2;241;231;220m遠山 和葉\u001b[0;38;2;140;123;118m  ·  Kazuha Toyama" },
+        { "type": "custom", "format": "\u001b[38;2;216;52;63m─\u001b[38;2;218;57;62m─\u001b[38;2;219;61;62m─\u001b[38;2;221;66;61m─\u001b[38;2;223;71;61m─\u001b[38;2;224;75;60m─\u001b[38;2;226;80;60m─\u001b[38;2;228;85;59m─\u001b[38;2;229;89;59m─\u001b[38;2;231;94;58m─\u001b[38;2;232;99;58m─\u001b[38;2;232;105;58m─\u001b[38;2;233;111;58m─\u001b[38;2;233;117;59m─\u001b[38;2;233;123;59m─\u001b[38;2;234;128;59m─\u001b[38;2;234;134;59m─\u001b[38;2;234;140;60m─\u001b[38;2;235;146;60m─\u001b[38;2;235;152;60m─\u001b[38;2;236;158;62m─\u001b[38;2;237;163;66m─\u001b[38;2;237;169;69m─\u001b[38;2;238;174;72m─\u001b[38;2;239;180;75m─\u001b[38;2;240;185;79m─\u001b[38;2;241;191;82m─\u001b[38;2;242;196;85m─\u001b[38;2;243;202;89m─\u001b[38;2;244;207;92m─" },
 
-        { "type": "os",       "key": " 󰣇  OS",       "format": "{2}" },
-        { "type": "kernel",   "key": " 󰌽  Kernel" },
-        { "type": "packages", "key": " 󰏖  Packages" },
-        { "type": "shell",    "key": "   Shell" },
-        { "type": "uptime",   "key": " 󰅐  Uptime" },
+        { "type": "os",       "key": " 󰣇  OS", "keyColor": "38;2;216;52;63",       "format": "{2}" },
+        { "type": "kernel",   "key": " 󰌽  Kernel", "keyColor": "38;2;216;52;63" },
+        { "type": "packages", "key": " 󰏖  Packages", "keyColor": "38;2;216;52;63" },
+        { "type": "shell",    "key": "   Shell", "keyColor": "38;2;216;52;63" },
+        { "type": "uptime",   "key": " 󰅐  Uptime", "keyColor": "38;2;216;52;63" },
         "break",
 
-        { "type": "wm",       "key": " 󰕮  WM" },
-        { "type": "terminal", "key": " 󰆍  Terminal" },
-        { "type": "terminalfont", "key": "   Font", "format": "{1}" },
+        { "type": "wm",       "key": " 󰕮  WM", "keyColor": "38;2;232;97;58" },
+        { "type": "terminal", "key": " 󰆍  Terminal", "keyColor": "38;2;232;97;58" },
+        { "type": "terminalfont", "key": "   Font", "keyColor": "38;2;232;97;58", "format": "{1}" },
         {
             "type": "command",
-            "key": "   Wallpaper",
+            "key": "   Wallpaper", "keyColor": "38;2;232;97;58",
             "text": "basename \"$(cat ~/.local/state/caelestia/wallpaper/path.txt)\" | sed 's/\\.[^.]*$//'"
         },
         "break",
 
-        { "type": "cpu",  "key": " 󰻠  CPU",  "format": "{1}" },
-        { "type": "gpu",  "key": " 󰢮  GPU",  "format": "{2}" },
-        { "type": "disk", "key": " 󰋊  Disk", "folders": "/" },
+        { "type": "cpu",  "key": " 󰻠  CPU", "keyColor": "38;2;235;154;60",  "format": "{1}" },
+        { "type": "gpu",  "key": " 󰢮  GPU", "keyColor": "38;2;235;154;60",  "format": "{2}" },
+        { "type": "disk", "key": " 󰋊  Disk", "keyColor": "38;2;235;154;60", "folders": "/" },
         {
             "type": "command",
-            "key": " 󰍹  Display",
+            "key": " 󰍹  Display", "keyColor": "38;2;235;154;60",
             "text": "hyprctl monitors -j | python3 -c 'import sys,json; print(\", \".join(f\"{m[\"width\"]}x{m[\"height\"]}@{round(m[\"refreshRate\"])}Hz\" for m in json.load(sys.stdin)))'"
         },
         "break",
 
-        { "type": "colors", "paddingLeft": 2, "symbol": "circle" },
+        // Karuta card of the day: walks the 100 Hyakunin Isshu poems, one per day
+        // (~/.config/fastfetch/karuta/today; #40 忍ぶれど is the fallback).
+        { "type": "command", "key": " ", "keyWidth": 1, "outputColor": "38;2;140;123;118", "text": "~/.config/fastfetch/karuta/today 1" },
+        { "type": "command", "key": " ", "keyWidth": 1, "outputColor": "38;2;140;123;118", "text": "~/.config/fastfetch/karuta/today 2" },
+        "break",
+        { "type": "custom", "format": "  \u001b[38;2;216;52;63m●  \u001b[38;2;232;97;58m●  \u001b[38;2;235;154;60m●  \u001b[38;2;244;207;92m●  \u001b[38;2;67;180;148m●  \u001b[38;2;162;85;155m●" },
         "break"
     ]
 }

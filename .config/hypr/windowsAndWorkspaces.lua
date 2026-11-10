@@ -43,6 +43,18 @@ hl.window_rule({
     center = true,
 })
 
+-- The vault's password prompt (~/.local/bin/vault, when opened from Nautilus):
+-- a small kitty floating in the middle of the screen, above everything.
+hl.window_rule({
+    name  = "vault-prompt",
+    match = { class = "^vault-prompt$" },
+
+    float  = true,
+    center = true,
+    pin    = true,
+    size   = "640 120",
+})
+
 -- GTK/Qt file pickers, which report no useful class of their own.
 -- The noun is required on purpose: a bare "^Open " would also float a browser
 -- window titled "Open Source Project - Brave".
@@ -70,9 +82,14 @@ hl.window_rule({
 -- switch; `immediate` is what actually opts a window in, so nothing else on
 -- the desktop can tear. Worth having on a 280Hz panel where the latency
 -- saving is real and the artifacts are not visible at that frame rate.
+-- Sober (Roblox) also needs MESA_VK_WSI_PRESENT_MODE=immediate (flatpak
+-- override), or its FIFO swapchain stays vsync-locked and this rule does little.
+-- BROKEN IN 0.56.2: nothing tears (activelyTearing stays false, tearingBlockedBy
+-- NOT_TORN) - regression from PR #15500, upstream issues #16035/#16102, fixed on
+-- main after the release. Re-check with `hyprctl monitors` mid-game after updating.
 hl.window_rule({
     name  = "tearing-for-games",
-    match = { class = "^(steam_app_\\d+|gamescope|Minecraft.*|com\\.mojang.*)$" },
+    match = { class = "^(steam_app_\\d+|gamescope|Minecraft.*|com\\.mojang.*|org\\.vinegarhq\\.Sober)$" },
 
     immediate = true,
 })
@@ -86,7 +103,7 @@ hl.window_rule({
 -- what the upstream Caelestia Hyprland config ships.
 hl.layer_rule({
     name  = "caelestia-no-anim",
-    match = { namespace = "caelestia-(border-exclusion|area-picker|circle)" },
+    match = { namespace = "caelestia-(border-exclusion|area-picker|circle|lyrics)" },
     no_anim = true,
 })
 hl.layer_rule({

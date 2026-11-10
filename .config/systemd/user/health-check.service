@@ -1,5 +1,8 @@
 [Unit]
 Description=Silent-failure watchdog (snapper, restic, failed units)
+# Both timers are Persistent and fire together after a boot that missed them;
+# without this the check reads the restic age before the catch-up backup runs.
+After=backup.service
 
 [Service]
 Type=oneshot

@@ -55,7 +55,7 @@
   --popover-fg-color: #{{ onSurface.hex }};
   --overview-bg-color: #{{ surfaceContainerLow.hex }};
   --overview-fg-color: #{{ onSurface.hex }};
-  --active-toggle-bg-color: #{{ surfaceContainerHighest.hex }};
+  --active-toggle-bg-color: #{{ raisedHighest.hex }};
   --active-toggle-fg-color: #{{ onSurface.hex }};
 }
 

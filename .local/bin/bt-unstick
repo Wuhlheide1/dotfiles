@@ -1,0 +1,169 @@
+#!/usr/bin/env python3
+"""bt-unstick: frees Bluetooth headphones that BlueZ can't reconnect by itself.
+
+The cheap USB dongle (Actions Semiconductor 10d7:b012) sometimes drops the
+audio link mid-playback. PipeWire logs "Missing completion reports ...
+firmware bug?" and "Failure in Bluetooth audio transport". After that, every
+connect to the headphones fails with "Operation already in progress (114)",
+in bursts, until the headphones are switched off and on. That happened to the
+XM5 on 2026-10-26 at 00:48 and lasted 90 s.
+
+This follows bluetoothd's log. If an audio device stays in that loop for
+STUCK_S with no PipeWire sink, it does the off-and-on from the PC side:
+disconnect it, power-cycle the adapter, then run a short BR/EDR scan and
+connect. That scan-then-connect is the recipe that works on this dongle. A
+notification says what happened.
+
+The adapter reset would also drop any other connected device (the DualSense),
+so when one is connected it only notifies.
+
+bt-unstick.service runs this. `bt-unstick --replay FILE` runs a saved
+`journalctl -o short-unix -u bluetooth` log through the detector and prints
+what it would do, without changing anything.
+"""
+import re, subprocess, sys, time
+
+STUCK_S = 20        # loop must last this long ...
+MIN_HITS = 8        # ... with at least this many failed connects
+GAP_S = 60          # a quieter gap than this ends the episode
+COOLDOWN_S = 120    # after a recovery, leave the device alone this long
+MAX_FAILS = 2       # stop trying for a device after this many failed recoveries
+
+HIT = re.compile(r'connect to ([0-9A-F:]{17}): Operation already in progress \(114\)')
+
+
+def bt(*args, timeout=15):
+    try:
+        return subprocess.run(['bluetoothctl', *args], capture_output=True,
+                              text=True, timeout=timeout).stdout
+    except subprocess.TimeoutExpired:
+        return ''
+
+
+def info(mac):
+    return bt('info', mac)
+
+
+def name(mac):
+    m = re.search(r'^\s*Alias: (.+)$', info(mac), re.M)
+    return m.group(1) if m else mac
+
+
+def is_audio(mac):
+    return 'Audio Sink' in info(mac)
+
+
+def has_sink(mac):
+    sinks = subprocess.run(['pactl', 'list', 'sinks', 'short'],
+                           capture_output=True, text=True).stdout
+    return 'bluez_output.' + mac.replace(':', '_') in sinks
+
+
+def other_connected(mac):
+    out = bt('devices', 'Connected')
+    return [line.split(' ', 2)[2] for line in out.splitlines()
+            if line.startswith('Device ') and line.split(' ')[1] != mac]
+
+
+def notify(title, body):
+    subprocess.run(['notify-send', '-a', 'Bluetooth', '-i', 'bluetooth', title, body])
+
+
+def wait_sink(mac, seconds):
+    for _ in range(seconds):
+        if has_sink(mac):
+            return True
+        time.sleep(1)
+    return False
+
+
+def recover(mac):
+    """Returns True when the headphones are back as a PipeWire sink."""
+    dev = name(mac)
+    print(f'{dev} ({mac}): stuck reconnect loop, recovering', flush=True)
+
+    bt('disconnect', mac)
+    if wait_sink(mac, 5):
+        print(f'{dev}: back after disconnect', flush=True)
+        return True
+
+    others = other_connected(mac)
+    if others:
+        print(f'{dev}: adapter reset skipped, connected: {", ".join(others)}', flush=True)
+        notify(dev, f'Connection stuck. Switch them off and on. '
+                    f'(Bluetooth reset skipped: {", ".join(others)} connected)')
+        return False
+
+    bt('power', 'off')
+    time.sleep(2)
+    bt('power', 'on')
+    time.sleep(2)
+
+    for attempt in range(1, 6):
+        bt('--timeout', '4', 'scan', 'bredr', timeout=10)
+        bt('--timeout', '10', 'connect', mac, timeout=15)
+        if wait_sink(mac, 8):
+            print(f'{dev}: reconnected after adapter reset (attempt {attempt})', flush=True)
+            notify(dev, 'Connection was stuck. Bluetooth was reset and they are back.')
+            return True
+
+    print(f'{dev}: reconnect failed after adapter reset', flush=True)
+    notify(dev, 'Connection stuck and the automatic reset didn\'t help. '
+                'Switch them off and on.')
+    return False
+
+
+def run(lines, replay=False):
+    episodes = {}       # mac -> [first, last, hits]
+    quiet_until = {}    # mac -> time before which it's left alone
+    fails = {}          # mac -> failed recoveries in a row
+
+    for line in lines:
+        m = HIT.search(line)
+        if not m:
+            continue
+        mac = m.group(1)
+        now = float(line.split(' ', 1)[0]) if replay else time.time()
+
+        ep = episodes.get(mac)
+        if ep is None or now - ep[1] > GAP_S:
+            ep = episodes[mac] = [now, now, 0]
+        ep[1] = now
+        ep[2] += 1
+
+        if (ep[2] < MIN_HITS or now - ep[0] < STUCK_S
+                or now < quiet_until.get(mac, 0) or fails.get(mac, 0) >= MAX_FAILS):
+            continue
+
+        if replay:
+            stamp = time.strftime('%H:%M:%S', time.localtime(now))
+            print(f'{stamp} would recover {mac} '
+                  f'({ep[2]} hits over {now - ep[0]:.0f} s)')
+        elif not is_audio(mac) or has_sink(mac):
+            pass
+        elif recover(mac):
+            fails[mac] = 0
+        else:
+            fails[mac] = fails.get(mac, 0) + 1
+            if fails[mac] >= MAX_FAILS:
+                print(f'{mac}: {MAX_FAILS} failed recoveries, giving up until restart',
+                      flush=True)
+
+        episodes.pop(mac, None)
+        quiet_until[mac] = now + COOLDOWN_S
+
+
+def main():
+    if len(sys.argv) == 3 and sys.argv[1] == '--replay':
+        with open(sys.argv[2]) as f:
+            run(f, replay=True)
+        return
+    proc = subprocess.Popen(['journalctl', '-f', '-n', '0', '-o', 'cat',
+                             '-u', 'bluetooth.service'],
+                            stdout=subprocess.PIPE, text=True)
+    run(proc.stdout)
+    sys.exit(proc.wait() or 1)
+
+
+if __name__ == '__main__':
+    main()

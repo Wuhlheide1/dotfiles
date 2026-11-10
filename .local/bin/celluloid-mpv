@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+celluloid_args=()
+
+for arg in "$@"; do
+    if [[ "$arg" == --mpv-* ]]; then
+        celluloid_args+=("$arg")
+    elif [[ "$arg" == --* ]]; then
+        # Map bare mpv flags (--foo=bar) to Celluloid format (--mpv-foo=bar)
+        celluloid_args+=("--mpv-${arg#--}")
+    else
+        celluloid_args+=("$arg")
+    fi
+done
+
+exec celluloid "${celluloid_args[@]}"

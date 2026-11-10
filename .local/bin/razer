@@ -1,0 +1,1040 @@
+#!/usr/bin/env python3
+"""razer: the Synapse settings for the Basilisk V4 Pro, without Synapse.
+
+Talks the Razer HID protocol (the one openrazer uses) straight to the mouse's
+control interface over hidraw, through whichever receiver it is paired to (the
+dongle or the Mouse Dock V2 Pro). openrazer has no entry for the V4 Pro (USB
+1532:00e3) yet, so this replaces it. Everything set here is stored on the mouse
+itself, so it survives replugging, other PCs, and other OSes.
+
+    razer                        status overview
+    razer battery [--quiet]      charge level (exit 2 if the mouse is asleep)
+    razer dpi [800 | 800x1200]   current sensitivity
+    razer stages [800 1600 ...] [--active N]
+                                 the DPI steps the top buttons cycle through
+    razer poll [125..8000]       polling rate in Hz
+    razer light [ZONE] EFFECT    off | static RRGGBB | breathe RRGGBB |
+                                 spectrum | wave [left|right]
+                                 ZONE: wheel | logo | underglow | all (default)
+    razer brightness [ZONE] [0-100]
+    razer sleep [60-900]         seconds idle before the mouse sleeps
+    razer lowbatt [5-50]         % at which the mouse starts warning
+    razer smartreel [on|off]     wheel switches to free-spin on fast flicks
+    razer scrollaccel [on|off]   fast scrolling scrolls further
+    razer mode [normal|driver]   normal = the mouse runs its own buttons
+    razer daemon                 tray battery, low-battery alerts, button
+                                 actions, freeze nudge, game mode
+                                 (razer.service runs this)
+
+Needs read/write access to the hidraw node: /etc/udev/rules.d/70-razer.rules
+(installed by ~/.config/rice/pending/install-razer-udev.sh).
+"""
+import argparse, fcntl, glob, json, os, re, socket, subprocess, sys, time
+
+TX = 0x1F           # transaction id every current Razer mouse answers to
+VARSTORE = 0x01     # "save on the mouse", as opposed to 0x00 = this session only
+ZONES = {'wheel': 0x01, 'logo': 0x04, 'underglow': 0x0A}
+POLL = {8000: 0x01, 4000: 0x02, 2000: 0x04, 1000: 0x08, 500: 0x10, 250: 0x20, 125: 0x40}
+STATUS = {1: 'busy', 3: 'failed', 4: 'no answer', 5: 'not supported'}
+RECEIVERS = {0x00e3: 'the dongle', 0x00f1: 'the Mouse Dock V2 Pro'}
+
+
+class Asleep(Exception):
+    """The dongle is there but the mouse doesn't answer: asleep, off, or out of range."""
+
+
+class NoMouse(Exception):
+    """No Razer control interface at all: dongle and cable unplugged."""
+
+
+def _ioc(nr, size):
+    return (3 << 30) | (size << 16) | (ord('H') << 8) | nr   # _IOWR('H', nr, size)
+
+
+def find_control_nodes():
+    # The control channel is the interface whose descriptor is a single
+    # 90-byte vendor feature report (Report Count 0x5a, Feature). On the V4 Pro
+    # that's interface 3; matching on the descriptor keeps this model-agnostic.
+    # Every receiver has one: the dongle and the Mouse Dock V2 Pro (1532:00f1).
+    nodes = []
+    for dev in sorted(glob.glob('/sys/class/hidraw/hidraw*'), key=lambda d: int(d.rsplit('hidraw', 1)[1])):
+        uevent = open(f'{dev}/device/uevent').read()
+        if ':00001532:' not in uevent:
+            continue
+        if b'\x95\x5a\xb1\x02' in open(f'{dev}/device/report_descriptor', 'rb').read():
+            pid = int(uevent.split('HID_ID=')[1].split('\n')[0].rsplit(':', 1)[1], 16)
+            name = uevent.split('HID_NAME=')[1].split('\n')[0].replace('Razer Razer', 'Razer')
+            nodes.append(('/dev/' + os.path.basename(dev), RECEIVERS.get(pid, name)))
+    if not nodes:
+        raise NoMouse()
+    return nodes
+
+
+class Mouse:
+    def __init__(self):
+        nodes = find_control_nodes()
+        self.receivers = len(nodes)
+        # The daemon and the CLI share the node; one report must finish before
+        # the next starts or a GET can return the other process's answer.
+        self.lock = open(os.path.join(os.environ.get('XDG_RUNTIME_DIR', '/tmp'), 'razer.lock'), 'w')
+        # With the dongle and the dock both plugged in, only the receiver the
+        # mouse is paired to passes mouse commands on (the other answers its own
+        # firmware query, so ask for the battery). Nobody answers = asleep: take
+        # the first, and the command raises Asleep as usual.
+        if len(nodes) > 1:
+            for self.path, self.name in nodes:
+                self.fd = os.open(self.path, os.O_RDWR)
+                try:
+                    self.battery()
+                    return
+                except Asleep:
+                    os.close(self.fd)
+        self.path, self.name = nodes[0]
+        self.fd = os.open(self.path, os.O_RDWR)     # PermissionError without the udev rule
+
+    def close(self):
+        os.close(self.fd)
+        self.lock.close()
+
+    def cmd(self, cls, cid, size, *args):
+        """Send one 90-byte report and return the 80 argument bytes of the answer."""
+        r = bytearray(90)
+        r[1], r[5], r[6], r[7] = TX, size, cls, cid
+        r[8:8 + len(args)] = bytes(args)
+        crc = 0
+        for b in r[2:88]:
+            crc ^= b
+        r[88] = crc
+        fcntl.flock(self.lock, fcntl.LOCK_EX)
+        try:
+            return self._xfer(r, cls, cid)
+        finally:
+            fcntl.flock(self.lock, fcntl.LOCK_UN)
+
+    def _xfer(self, r, cls, cid):
+        for attempt in range(3):
+            fcntl.ioctl(self.fd, _ioc(0x06, 91), b'\0' + bytes(r))
+            # Over the dongle an answer takes a few ms; poll instead of
+            # guessing one fixed delay like the kernel driver has to.
+            for _ in range(30):
+                time.sleep(0.004)
+                buf = bytearray(91)
+                fcntl.ioctl(self.fd, _ioc(0x07, 91), buf)
+                st, rcls, rcid = buf[1], buf[7], buf[8]
+                if (rcls, rcid) != (cls, cid) or st in (0, 1):
+                    continue
+                if st == 2:
+                    return buf[9:89]
+                if st == 4:
+                    break           # no answer: retry, the mouse may be waking
+                raise RuntimeError(f'command {cls:02x}:{cid:02x} {STATUS.get(st, st)}')
+        raise Asleep()
+
+    # -- reads ---------------------------------------------------------------
+    def firmware(self):
+        a = self.cmd(0x00, 0x81, 0x02); return f'{a[0]}.{a[1]}'
+
+    def battery(self):
+        return round(self.cmd(0x07, 0x80, 0x02)[1] * 100 / 255)
+
+    def charging(self):
+        return bool(self.cmd(0x07, 0x84, 0x02)[1])
+
+    def dpi(self):
+        a = self.cmd(0x04, 0x85, 0x07, 0x00)
+        return a[1] << 8 | a[2], a[3] << 8 | a[4]
+
+    def stages(self):
+        a = self.cmd(0x04, 0x86, 0x26, VARSTORE)
+        active, count = a[1], a[2]
+        out = []
+        for i in range(count):
+            s = a[3 + 7 * i: 10 + 7 * i]
+            out.append((s[1] << 8 | s[2], s[3] << 8 | s[4]))
+        return active, out
+
+    def poll(self, store=0x00):
+        # 0x00 = the rate running now, VARSTORE = the one saved on the mouse;
+        # they differ while game mode has its session-only rate on top.
+        code = self.cmd(0x00, 0xC0, 0x02, store)[1]
+        return next((hz for hz, c in POLL.items() if c == code), None)
+
+    def brightness(self, led):
+        return round(self.cmd(0x0F, 0x84, 0x03, VARSTORE, led)[2] * 100 / 255)
+
+    def sleep_time(self):
+        a = self.cmd(0x07, 0x83, 0x02); return a[0] << 8 | a[1]
+
+    def lowbatt(self):
+        return round(self.cmd(0x07, 0x81, 0x01)[0] * 100 / 255)
+
+    def smartreel(self, store=VARSTORE):
+        return bool(self.cmd(0x02, 0x97, 0x02, store)[1])
+
+    def scrollaccel(self, store=VARSTORE):
+        return bool(self.cmd(0x02, 0x96, 0x02, store)[1])
+
+    def mode(self):
+        return {0x00: 'normal', 0x03: 'driver'}.get(self.cmd(0x00, 0x84, 0x02)[0], '?')
+
+    # -- writes --------------------------------------------------------------
+    def set_dpi(self, x, y):
+        self.cmd(0x04, 0x05, 0x07, VARSTORE, x >> 8, x & 0xFF, y >> 8, y & 0xFF, 0, 0)
+
+    def nudge_dpi(self):
+        """What the DPI button does to a frozen sensor, minus the visible change:
+        100 DPI up and back, session-only (0x00), so nothing is written to flash."""
+        x, y = self.dpi()
+        for d in (100, 0):
+            self.cmd(0x04, 0x05, 0x07, 0x00, (x + d) >> 8, (x + d) & 0xFF, (y + d) >> 8, (y + d) & 0xFF, 0, 0)
+
+    def set_stages(self, active, stages):
+        args = [VARSTORE, active, len(stages)]
+        for i, (x, y) in enumerate(stages, 1):   # the mouse numbers stages from 1
+            args += [i, x >> 8, x & 0xFF, y >> 8, y & 0xFF, 0, 0]
+        self.cmd(0x04, 0x06, 0x26, *args)
+
+    def set_poll(self, hz, save=True):
+        # Razer's own software sends this twice, with 0x00 then 0x01; openrazer
+        # does the same for the other 8 kHz mice. The first byte is the storage:
+        # 0x00 alone changes only the running rate (game mode uses that).
+        self.cmd(0x00, 0x40, 0x02, 0x00, POLL[hz])
+        if save:
+            self.cmd(0x00, 0x40, 0x02, 0x01, POLL[hz])
+
+    def set_effect(self, led, effect, rgb=(0, 0, 0), direction=1):
+        r, g, b = rgb
+        if effect == 'off':
+            self.cmd(0x0F, 0x02, 0x06, VARSTORE, led, 0x00)
+        elif effect == 'static':
+            self.cmd(0x0F, 0x02, 0x09, VARSTORE, led, 0x01, 0, 0, 0x01, r, g, b)
+        elif effect == 'breathe':
+            self.cmd(0x0F, 0x02, 0x09, VARSTORE, led, 0x02, 0x01, 0, 0x01, r, g, b)
+        elif effect == 'spectrum':
+            self.cmd(0x0F, 0x02, 0x06, VARSTORE, led, 0x03)
+        elif effect == 'wave':
+            self.cmd(0x0F, 0x02, 0x06, VARSTORE, led, 0x04, direction, 0x28)
+
+    def set_brightness(self, led, pct):
+        self.cmd(0x0F, 0x04, 0x03, VARSTORE, led, round(pct * 255 / 100))
+
+    def set_sleep_time(self, s):
+        self.cmd(0x07, 0x03, 0x02, s >> 8, s & 0xFF)
+
+    def set_lowbatt(self, pct):
+        self.cmd(0x07, 0x01, 0x01, round(pct * 255 / 100))
+
+    def set_smartreel(self, on, save=True):
+        self.cmd(0x02, 0x17, 0x02, VARSTORE if save else 0x00, int(on))
+
+    def set_scrollaccel(self, on, save=True):
+        self.cmd(0x02, 0x16, 0x02, VARSTORE if save else 0x00, int(on))
+
+    def set_mode(self, mode):
+        # 0x02 also exists (a factory test mode); openrazer refuses it, so do we.
+        self.cmd(0x00, 0x04, 0x02, {'normal': 0x00, 'driver': 0x03}[mode], 0x00)
+
+
+# -- CLI -----------------------------------------------------------------------
+def fmt_dpi(xy):
+    return str(xy[0]) if xy[0] == xy[1] else f'{xy[0]}x{xy[1]}'
+
+
+def parse_dpi(s):
+    x, _, y = s.lower().partition('x')
+    x, y = int(x), int(y or x)
+    for v in (x, y):
+        if not 100 <= v <= 50000:
+            sys.exit(f'razer: {v} DPI is outside 100-50000')
+    return x, y
+
+
+def parse_rgb(s):
+    s = s.lstrip('#')
+    if len(s) != 6:
+        sys.exit(f'razer: colour must be RRGGBB, got {s!r}')
+    return tuple(int(s[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def onoff(v):
+    return 'on' if v else 'off'
+
+
+def status(m):
+    pct, chg = m.battery(), m.charging()
+    active, st = m.stages()
+    steps = '  '.join(f'[{fmt_dpi(s)}]' if i == active else fmt_dpi(s) for i, s in enumerate(st, 1))
+    # The dock answers the firmware query itself, with 0.0, so through the dock
+    # the mouse's version is unreadable (Synapse shows it).
+    fw = m.firmware()
+    print(f'Razer Basilisk V4 Pro  ({"" if fw == "0.0" else f"firmware {fw}, "}via {m.name})')
+    print(f'  battery      {pct}%' + ('  charging' if chg else ''))
+    print(f'  dpi          {fmt_dpi(m.dpi())}')
+    print(f'  stages       {steps}')
+    hz, saved = m.poll(), m.poll(VARSTORE)
+    print(f'  polling      {hz} Hz' + (f'  (game mode; saved: {saved} Hz)' if hz != saved else ''))
+    print('  brightness   ' + '  '.join(f'{z} {m.brightness(l)}%' for z, l in ZONES.items()))
+    print(f'  sleep after  {m.sleep_time()} s idle')
+    print(f'  low battery  warns at {m.lowbatt()}%')
+    print(f'  scrolling    smart reel {onoff(m.smartreel(0x00))}, acceleration {onoff(m.scrollaccel(0x00))}')
+
+
+def zones_and_rest(args):
+    if args and args[0] in (*ZONES, 'all'):
+        z, args = args[0], args[1:]
+    else:
+        z = 'all'
+    return (list(ZONES.values()) if z == 'all' else [ZONES[z]]), args
+
+
+def main():
+    p = argparse.ArgumentParser(prog='razer', add_help=False)
+    p.add_argument('command', nargs='?', default='status')
+    p.add_argument('args', nargs='*')
+    p.add_argument('--active', type=int)
+    p.add_argument('--quiet', '-q', action='store_true')
+    p.add_argument('-h', '--help', action='store_true')
+    o = p.parse_args()
+    if o.help or o.command == 'help':
+        print(__doc__.strip()); return
+    c, a = o.command, o.args
+    if c == 'daemon':
+        daemon(); return
+    try:
+        m = Mouse()
+    except NoMouse:
+        sys.exit('razer: no Razer mouse found (is the dongle or cable plugged in?)')
+    except PermissionError:
+        sys.exit('razer: no access to the mouse. Run once:\n'
+                 '    bash ~/.config/rice/pending/install-razer-udev.sh')
+    try:
+        if c == 'status':
+            status(m)
+        elif c == 'battery':
+            pct = m.battery()
+            print(f'{pct}' if o.quiet else f'{pct}%' + ('  charging' if m.charging() else ''))
+        elif c == 'dpi':
+            if a:
+                m.set_dpi(*parse_dpi(a[0]))
+            print(fmt_dpi(m.dpi()))
+        elif c == 'stages':
+            if a:
+                if len(a) > 5:
+                    sys.exit('razer: the mouse holds at most 5 stages')
+                new = [parse_dpi(s) for s in a]
+                active = o.active or min(m.stages()[0], len(new))
+                if not 1 <= active <= len(new):
+                    sys.exit(f'razer: --active must be 1-{len(new)}')
+                m.set_stages(active, new)
+            elif o.active:
+                cur = m.stages()[1]
+                if not 1 <= o.active <= len(cur):
+                    sys.exit(f'razer: --active must be 1-{len(cur)}')
+                m.set_stages(o.active, cur)
+            active, st = m.stages()
+            print('  '.join(f'[{fmt_dpi(s)}]' if i == active else fmt_dpi(s) for i, s in enumerate(st, 1)))
+        elif c == 'poll':
+            if a:
+                hz = int(a[0])
+                if hz not in POLL:
+                    sys.exit(f'razer: polling rate must be one of {", ".join(map(str, sorted(POLL)))}')
+                m.set_poll(hz)
+            print(f'{m.poll()} Hz')
+        elif c == 'light':
+            leds, rest = zones_and_rest(a)
+            if not rest:
+                sys.exit('razer: light [wheel|logo|underglow|all] off | static RRGGBB | '
+                         'breathe RRGGBB | spectrum | wave [left|right]')
+            eff = rest[0]
+            if eff in ('static', 'breathe'):
+                if len(rest) < 2:
+                    sys.exit(f'razer: {eff} needs a colour, e.g. razer light {eff} c8a2c8')
+                kw = {'rgb': parse_rgb(rest[1])}
+            elif eff == 'wave':
+                kw = {'direction': 2 if rest[1:] == ['left'] else 1}
+            elif eff in ('off', 'spectrum'):
+                kw = {}
+            else:
+                sys.exit(f'razer: unknown effect {eff!r}')
+            for led in leds:
+                m.set_effect(led, eff, **kw)
+        elif c == 'brightness':
+            leds, rest = zones_and_rest(a)
+            if rest:
+                pct = int(rest[0])
+                if not 0 <= pct <= 100:
+                    sys.exit('razer: brightness is 0-100')
+                for led in leds:
+                    m.set_brightness(led, pct)
+            print('  '.join(f'{z} {m.brightness(l)}%' for z, l in ZONES.items() if l in leds))
+        elif c == 'sleep':
+            if a:
+                s = int(a[0])
+                if not 60 <= s <= 900:
+                    sys.exit('razer: sleep timeout is 60-900 s')
+                m.set_sleep_time(s)
+            print(f'{m.sleep_time()} s')
+        elif c == 'lowbatt':
+            if a:
+                pct = int(a[0])
+                if not 5 <= pct <= 50:
+                    sys.exit('razer: low-battery warning is 5-50 %')
+                m.set_lowbatt(pct)
+            print(f'{m.lowbatt()}%')
+        elif c in ('smartreel', 'scrollaccel'):
+            if a:
+                if a[0] not in ('on', 'off'):
+                    sys.exit(f'razer: {c} on|off')
+                getattr(m, f'set_{c}')(a[0] == 'on')
+            print(onoff(getattr(m, c)()))
+        elif c == 'mode':
+            if a:
+                if a[0] not in ('normal', 'driver'):
+                    sys.exit('razer: mode normal|driver')
+                m.set_mode(a[0])
+            print(m.mode())
+        else:
+            sys.exit(f'razer: unknown command {c!r} (razer help)')
+    except Asleep:
+        if not o.quiet:
+            print('razer: the mouse is asleep or out of range. Move it and try again.', file=sys.stderr)
+        sys.exit(2)
+
+
+# -- daemon --------------------------------------------------------------------
+# What the mouse's own keyboard interface sends -> what happens instead. These
+# keystrokes are stored on the mouse (set once in Synapse on Windows), and only
+# this mouse's keyboard nodes are grabbed, so the same keys typed on the real
+# keyboard still type normally. Anything not listed passes through unchanged.
+BUTTON_ACTIONS = {
+    # new third side button; Synapse has it as "$" (Shift+4)
+    ('shift', 'KEY_4'): ['qs', '-c', 'circle', 'ipc', 'call', 'circle', 'toggle'],
+    # paddle, once Synapse maps it to Ctrl+Shift+M (Discord's mute key on Windows);
+    # same command as the XF86AudioMicMute bind, and Caelestia's OSD shows it
+    ('ctrl+shift', 'KEY_M'): ['wpctl', 'set-mute', '@DEFAULT_AUDIO_SOURCE@', 'toggle'],
+}
+# The two new top buttons (AI Prompt Master, Profile) are F13/F14 in Synapse so
+# games can bind them: Windows has no mouse button 6+, and the mouse's pointer
+# interface reports only 5. Here the Wooting's umlaut layer owns F13-F17
+# (ä ö ü ß €), so they would type ä/ö; they become F18/F19 instead, keys nothing
+# else uses that xkb gives real F18/F19 keysyms (custom:fkeys). Set them to
+# F18/F19 in Synapse as well and both systems agree; then this does nothing.
+KEY_REMAP = {'KEY_F13': 'KEY_F18', 'KEY_F14': 'KEY_F19'}
+
+# Game mode: while a game has focus the mouse runs this, session-only (nothing
+# written to flash); everywhere else it runs what is saved on it (`razer poll`,
+# `razer smartreel`, ...). A power cycle also falls back to the saved values.
+GAME_PROFILE = {'poll': 4000, 'smartreel': False, 'scrollaccel': False}
+# Window classes that count as games (regexes, whole class). More can go in
+# ~/.config/razer/games, one per line; anything GameMode tracks counts too.
+GAME_CLASSES = [r'steam_app_.*', r'org\.vinegarhq\.Sober', r'Minecraft.*', r'gamescope']
+GAMES_FILE = os.path.expanduser('~/.config/razer/games')
+
+ALERT_AT = (20, 10, 5)      # % for the low-battery notifications
+POLL_S = 300                # battery check interval; it drains ~0.5 %/h
+
+
+def render_icon(pct, charging, size):
+    """A mouse outline that fills from the bottom with the charge.
+
+    Drawn in white with alpha only: Caelestia recolours tray icons to the
+    scheme. The button split and the charging bolt invert whatever is under
+    them, so they stay visible over both the filled and the empty part.
+    """
+    from PIL import Image, ImageChops, ImageDraw
+    S = size * 4
+    w, h = 0.56 * S, 0.88 * S
+    x0, y0 = (S - w) / 2, (S - h) / 2
+    x1, y1 = x0 + w, y0 + h
+    st = 0.075 * S
+    base = Image.new('L', (S, S), 0)
+    d = ImageDraw.Draw(base)
+    d.rounded_rectangle((x0, y0, x1, y1), radius=w / 2, outline=255, width=round(st))
+    gap = st * 1.9
+    inner = Image.new('L', (S, S), 0)
+    ImageDraw.Draw(inner).rounded_rectangle((x0 + gap, y0 + gap, x1 - gap, y1 - gap), radius=w / 2 - gap, fill=255)
+    level = Image.new('L', (S, S), 0)
+    top = y0 + gap + (1 - pct / 100) * (h - 2 * gap)
+    ImageDraw.Draw(level).rectangle((0, top, S, S), fill=255)
+    base = ImageChops.lighter(base, ImageChops.multiply(inner, level))
+    marks = Image.new('L', (S, S), 0)
+    m = ImageDraw.Draw(marks)
+    cx = S / 2
+    m.line((cx, y0 + st, cx, y0 + 0.34 * h), fill=255, width=round(st * 0.8))
+    if charging:
+        b = 0.17 * S
+        cy = y0 + 0.64 * h
+        m.polygon([(cx + 0.15 * b, cy - b), (cx - 0.45 * b, cy + 0.1 * b), (cx - 0.02 * b, cy + 0.1 * b),
+                   (cx - 0.15 * b, cy + b), (cx + 0.45 * b, cy - 0.1 * b), (cx + 0.02 * b, cy - 0.1 * b)], fill=255)
+    alpha = ImageChops.difference(base, marks).resize((size, size), Image.LANCZOS)
+    # StatusNotifierItem pixmaps are ARGB32 in network byte order.
+    return bytes(v for a in alpha.tobytes() for v in (a, 255, 255, 255))
+
+
+def daemon():
+    import dbus, dbus.service
+    from dbus.mainloop.glib import DBusGMainLoop
+    from gi.repository import GLib
+    import evdev
+    from evdev import ecodes
+
+    DBusGMainLoop(set_as_default=True)
+    bus = dbus.SessionBus()
+    log = lambda msg: print(msg, file=sys.stderr, flush=True)
+
+    def notify(title, body, urgency='normal'):
+        subprocess.run(['notify-send', '-a', 'Basilisk V4 Pro', '-i', 'input-mouse', '-u', urgency,
+                        '-h', 'string:x-canonical-private-synchronous:razer-battery', title, body])
+
+    st = {'mouse': None, 'pct': None, 'charging': False, 'asleep': False, 'dpi': None, 'hz': None,
+          'alerted': set(), 'full_told': False, 'last_poll': 0.0, 'game': False}
+
+    # -- StatusNotifierItem + its menu (Caelestia shows the menu on hover) ----
+    SNI, MENU, PROPS = 'org.kde.StatusNotifierItem', 'com.canonical.dbusmenu', 'org.freedesktop.DBus.Properties'
+
+    no_pix = dbus.Array([], signature='(iiay)')
+    pix_cache = {}
+
+    def pixmaps():
+        key = (st['pct'] or 0, st['charging'])
+        if key not in pix_cache:
+            pix_cache.clear()
+            pix_cache[key] = dbus.Array([dbus.Struct((dbus.Int32(s), dbus.Int32(s), dbus.ByteArray(render_icon(*key, s))))
+                                         for s in (32, 64)], signature='(iiay)')
+        return pix_cache[key]
+
+    def status():
+        # Passive = Caelestia hides the icon: dongle unplugged or never reached.
+        return 'Active' if st['mouse'] and st['pct'] is not None else 'Passive'
+
+    class Item(dbus.service.Object):
+        def props(self):
+            return {
+                'Category': 'Hardware', 'Id': 'razer-mouse', 'Title': 'Basilisk V4 Pro', 'Status': status(),
+                'IconName': '', 'IconPixmap': pixmaps(), 'IconThemePath': '',
+                'OverlayIconName': '', 'OverlayIconPixmap': no_pix,
+                'AttentionIconName': '', 'AttentionIconPixmap': no_pix, 'AttentionMovieName': '',
+                'ToolTip': dbus.Struct(('', no_pix, 'Basilisk V4 Pro', menu_lines()[0]), signature='sa(iiay)ss'),
+                'ItemIsMenu': False, 'Menu': dbus.ObjectPath('/MenuBar'), 'WindowId': dbus.Int32(0),
+            }
+
+        @dbus.service.method(PROPS, in_signature='ss', out_signature='v')
+        def Get(self, iface, name):
+            return self.props()[name]
+
+        @dbus.service.method(PROPS, in_signature='s', out_signature='a{sv}')
+        def GetAll(self, iface):
+            return dbus.Dictionary(self.props(), signature='sv') if iface == SNI else {}
+
+        @dbus.service.method(SNI, in_signature='ii')
+        def Activate(self, x, y):
+            refresh(force=True)
+
+        @dbus.service.method(SNI, in_signature='ii')
+        def SecondaryActivate(self, x, y):
+            pass
+
+        @dbus.service.method(SNI, in_signature='ii')
+        def ContextMenu(self, x, y):
+            pass
+
+        @dbus.service.method(SNI, in_signature='is')
+        def Scroll(self, delta, orientation):
+            pass
+
+        @dbus.service.signal(SNI)
+        def NewIcon(self):
+            pass
+
+        @dbus.service.signal(SNI, signature='s')
+        def NewStatus(self, status):
+            pass
+
+        @dbus.service.signal(SNI)
+        def NewToolTip(self):
+            pass
+
+    def menu_lines():
+        if st['pct'] is None:
+            return ['Battery unknown', '']
+        if st['asleep']:
+            first = f'Asleep · {st["pct"]}% when last seen'
+        else:
+            first = f'Battery {st["pct"]}%' + (' · charging' if st['charging'] else '')
+        second = f'{st["dpi"]} DPI · {st["hz"]} Hz' + (' · game' if st['game'] else '') if st['dpi'] else ''
+        return [first, second]
+
+    class Menu(dbus.service.Object):
+        revision = 1
+
+        def node(self, i, text):
+            # First line reads as the headline; the second is muted (disabled).
+            return dbus.Struct((dbus.Int32(i), dbus.Dictionary({'label': text, 'enabled': i == 1}, signature='sv'),
+                                dbus.Array([], signature='v')), signature='ia{sv}av')
+
+        def layout(self):
+            kids = [self.node(i, t) for i, t in enumerate(menu_lines(), 1) if t]
+            return dbus.Struct((dbus.Int32(0), dbus.Dictionary({'children-display': 'submenu'}, signature='sv'),
+                                dbus.Array(kids, signature='v')), signature='ia{sv}av')
+
+        @dbus.service.method(MENU, in_signature='iias', out_signature='u(ia{sv}av)')
+        def GetLayout(self, parent, depth, names):
+            return dbus.UInt32(self.revision), self.layout()
+
+        @dbus.service.method(MENU, in_signature='aias', out_signature='a(ia{sv})')
+        def GetGroupProperties(self, ids, names):
+            nodes = self.layout()[2]
+            return dbus.Array([dbus.Struct((n[0], n[1]), signature='ia{sv}') for n in nodes if not ids or n[0] in ids],
+                              signature='(ia{sv})')
+
+        @dbus.service.method(MENU, in_signature='is', out_signature='v')
+        def GetProperty(self, i, name):
+            for n in self.layout()[2]:
+                if n[0] == i:
+                    return n[1].get(name, '')
+            return ''
+
+        @dbus.service.method(MENU, in_signature='isvu')
+        def Event(self, i, event, data, ts):
+            pass
+
+        @dbus.service.method(MENU, in_signature='a(isvu)', out_signature='ai')
+        def EventGroup(self, events):
+            return dbus.Array([], signature='i')
+
+        @dbus.service.method(MENU, in_signature='i', out_signature='b')
+        def AboutToShow(self, i):
+            # Hovering the icon refreshes, so the popout shows the real level.
+            return refresh(force=False)
+
+        @dbus.service.method(MENU, in_signature='ai', out_signature='aiai')
+        def AboutToShowGroup(self, ids):
+            refresh(force=False)
+            return dbus.Array([], signature='i'), dbus.Array([], signature='i')
+
+        @dbus.service.method(PROPS, in_signature='ss', out_signature='v')
+        def Get(self, iface, name):
+            return self.GetAll(iface)[name]
+
+        @dbus.service.method(PROPS, in_signature='s', out_signature='a{sv}')
+        def GetAll(self, iface):
+            return dbus.Dictionary({'Version': dbus.UInt32(3), 'TextDirection': 'ltr', 'Status': 'normal',
+                                    'IconThemePath': dbus.Array([], signature='s')}, signature='sv')
+
+        @dbus.service.signal(MENU, signature='ui')
+        def LayoutUpdated(self, revision, parent):
+            pass
+
+    name = f'org.kde.StatusNotifierItem-{os.getpid()}-1'
+    bus_name = dbus.service.BusName(name, bus)
+    item, menu = Item(bus, '/StatusNotifierItem'), Menu(bus, '/MenuBar')
+
+    def register(owner):
+        # The watcher lives in the Caelestia shell; register again whenever it
+        # (re)appears, e.g. after `caelestia shell -r`.
+        if owner:
+            try:
+                bus.get_object('org.kde.StatusNotifierWatcher', '/StatusNotifierWatcher').RegisterStatusNotifierItem(
+                    name, dbus_interface='org.kde.StatusNotifierWatcher')
+            except dbus.DBusException as e:
+                log(f'tray registration failed: {e}')
+    bus.watch_name_owner('org.kde.StatusNotifierWatcher', register)
+
+    # -- battery ----------------------------------------------------------------
+    def refresh(force=True):
+        """Poll the mouse; returns True if anything the tray shows changed."""
+        if not force and time.monotonic() - st['last_poll'] < 10:
+            return False
+        st['last_poll'] = time.monotonic()
+        before = (st['pct'], st['charging'], st['asleep'], st['dpi'], st['hz'], bool(st['mouse']))
+        try:
+            if not st['mouse']:
+                st['mouse'] = Mouse()
+            m = st['mouse']
+            st['pct'], st['charging'] = m.battery(), m.charging()
+            st['dpi'], st['hz'], st['asleep'] = m.dpi()[0], m.poll(), False
+            if m.mode() == 'driver':
+                # Synapse on Windows leaves it in driver mode, which kills tilt,
+                # the clutch and the wheel toggle here.
+                m.set_mode('normal')
+                log('mouse was in driver mode (Synapse); switched back to normal')
+        except Asleep:
+            st['asleep'] = True
+            if st['mouse'].receivers > 1:
+                # Dongle and dock both plugged in: the mouse may have moved to
+                # the other one (re-paired), so pick the receiver again next time.
+                st['mouse'].close()
+                st['mouse'] = None
+        except (NoMouse, OSError) as e:
+            if st['mouse']:
+                log(f'mouse gone: {e!r}')
+                st['mouse'].close()
+            st['mouse'] = None
+        alerts()
+        after = (st['pct'], st['charging'], st['asleep'], st['dpi'], st['hz'], bool(st['mouse']))
+        if after != before:
+            tray_update()
+            return True
+        return False
+
+    def tray_update():
+        item.NewIcon()
+        item.NewToolTip()
+        item.NewStatus(status())
+        menu.revision += 1
+        menu.LayoutUpdated(dbus.UInt32(menu.revision), dbus.Int32(0))
+
+    def alerts():
+        pct = st['pct']
+        if pct is None or st['asleep']:
+            return
+        if st['charging']:
+            st['alerted'].clear()
+            if pct >= 100 and not st['full_told']:
+                st['full_told'] = True
+                notify('Mouse fully charged', 'You can unplug the cable.')
+            return
+        st['full_told'] = False
+        due = [t for t in ALERT_AT if pct <= t and t not in st['alerted']]
+        if due:
+            st['alerted'].update(t for t in ALERT_AT if t >= min(due))
+            notify(f'Mouse battery {pct}%', 'Charge it soon.' if pct > 5 else 'It will switch off shortly.',
+                   'critical' if pct <= 5 else 'normal')
+
+    def tick():
+        refresh()
+        # Asleep with two receivers also drops st['mouse']; probing both costs
+        # ~0.7 s of main loop, so that waits the full interval too.
+        GLib.timeout_add_seconds(POLL_S if st['mouse'] or st['asleep'] else 30, tick)
+        return False
+
+    # -- button actions -----------------------------------------------------------
+    MODS = {ecodes.KEY_LEFTSHIFT: 'shift', ecodes.KEY_RIGHTSHIFT: 'shift', ecodes.KEY_LEFTCTRL: 'ctrl',
+            ecodes.KEY_RIGHTCTRL: 'ctrl', ecodes.KEY_LEFTALT: 'alt', ecodes.KEY_RIGHTALT: 'alt',
+            ecodes.KEY_LEFTMETA: 'super', ecodes.KEY_RIGHTMETA: 'super'}
+    actions = {(frozenset(m.split('+')), ecodes.ecodes[k]): cmd for (m, k), cmd in BUTTON_ACTIONS.items()}
+    remap = {ecodes.ecodes[a]: ecodes.ecodes[b] for a, b in KEY_REMAP.items()}
+    grabbed = {}    # fd -> (device, uinput clone, state)
+
+    def on_key_event(fd, cond):
+        dev, ui, s = grabbed[fd]
+        try:
+            events = list(dev.read())
+        except OSError:
+            release(fd)
+            return False
+        for ev in events:
+            if ev.type == ecodes.EV_KEY and ev.code in remap:
+                ev.code = remap[ev.code]
+            if ev.type == ecodes.EV_KEY and ev.code in MODS:
+                # Hold modifiers back until we know whether they start a combo,
+                # so a consumed Shift+4 never leaks a lone Shift to fcitx5.
+                if ev.value == 1:
+                    s['pending'].append(ev.code)
+                elif ev.code in s['sent']:
+                    ui.write(ecodes.EV_KEY, ev.code, ev.value)
+                    if ev.value == 0:
+                        s['sent'].discard(ev.code)
+                elif ev.value == 0 and ev.code in s['pending']:
+                    s['pending'].remove(ev.code)
+            elif ev.type == ecodes.EV_KEY:
+                held = frozenset(MODS[c] for c in s['pending'] + list(s['sent']))
+                if ev.value == 1 and (held, ev.code) in actions:
+                    s['eaten'].add(ev.code)
+                    subprocess.Popen(actions[(held, ev.code)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                     start_new_session=True)
+                elif ev.code in s['eaten']:
+                    if ev.value == 0:
+                        s['eaten'].discard(ev.code)
+                else:
+                    for c in s['pending']:
+                        ui.write(ecodes.EV_KEY, c, 1)
+                        s['sent'].add(c)
+                    s['pending'].clear()
+                    ui.write(ecodes.EV_KEY, ev.code, ev.value)
+            elif ev.type in (ecodes.EV_REL, ecodes.EV_ABS):
+                ui.write(ev.type, ev.code, ev.value)
+            elif ev.type == ecodes.EV_SYN:
+                ui.syn()
+        return True
+
+    def release(fd):
+        dev, ui, _ = grabbed.pop(fd)
+        for f in (ui.close, dev.close):
+            try:
+                f()
+            except OSError:
+                pass
+        log(f'released {dev.path}')
+
+    def grab_keys():
+        if grabbed:
+            return True
+        for path in evdev.list_devices():
+            try:
+                dev = evdev.InputDevice(path)
+            except OSError:
+                continue
+            keys = dev.capabilities().get(ecodes.EV_KEY, [])
+            if dev.info.vendor != 0x1532 or ecodes.KEY_4 not in keys:
+                dev.close()
+                continue
+            ui = evdev.UInput.from_device(dev, name=f'{dev.name} (razer passthrough)')
+            dev.grab()
+            grabbed[dev.fd] = (dev, ui, {'pending': [], 'sent': set(), 'eaten': set()})
+            GLib.io_add_watch(dev.fd, GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR, on_key_event)
+            log(f'grabbed {path} ({dev.name})')
+        return True     # keep the 30 s rescan running for replugs
+
+    # -- freeze watch ---------------------------------------------------------------
+    # The V4 Pro's launch firmware (1.1) has a known bug, on the dongle and the
+    # dock alike (Razer Insider threads 92304/92322, Oct 2026): the cursor stops
+    # while clicks still arrive, until the mouse is power-cycled or its DPI button
+    # is pressed. This reads every receiver's pointer node (read-only, never
+    # grabbed); clicks with no motion = frozen, and the daemon then does what the
+    # DPI button does: a session-only DPI step and back, invisible when the hand
+    # was simply resting. Each freeze is logged with what ended it:
+    # `journalctl --user -u razer -g freeze`. One drain per 100 ms per node, so
+    # 1-8 kHz reporting costs next to nothing; only "any motion at all" matters.
+    FREEZE_CLICKS, FREEZE_QUIET = 3, 3.0    # clicks with no motion for this long = frozen
+    NUDGE_EVERY, NUDGES = 3, 5              # DPI nudge at once, then every 3 s, at most 5
+    fw = {'devs': {}, 'last_motion': time.monotonic(), 'clicks': 0, 'since': None,
+          'answers': None, 'kicks': [], 'silent': False}
+
+    def answers():
+        try:
+            if not st['mouse']:
+                st['mouse'] = Mouse()
+            st['mouse'].battery()
+            return True
+        except Asleep:
+            return False
+        except (NoMouse, OSError):
+            return None
+
+    def frozen_tick():
+        """While frozen: note whether the mouse still answers (switched off = silent)
+        and nudge the DPI."""
+        if fw['since'] is None:
+            return False
+        a = answers()
+        if a != fw['answers']:
+            log(f'freeze: mouse {"answers commands" if a else "is silent (switched off?)" if a is False else "unreachable"}')
+            fw['answers'] = a
+            fw['silent'] |= a is False
+        if a and len(fw['kicks']) < NUDGES:
+            try:
+                st['mouse'].nudge_dpi()
+                fw['kicks'].append((f'DPI nudge {len(fw["kicks"]) + 1}', time.monotonic()))
+            except (Asleep, RuntimeError, OSError) as e:
+                log(f'freeze: DPI nudge failed: {e!r}')
+        return True
+
+    def on_pointer(fd, cond):
+        dev = fw['devs'].get(fd)
+        if dev is None:
+            return False
+        try:
+            events = list(dev.read())
+        except BlockingIOError:
+            events = []
+        except OSError:
+            del fw['devs'][fd]
+            dev.close()
+            return False
+        now = time.monotonic()
+        moved = False
+        for ev in events:
+            if ev.type == ecodes.EV_REL and ev.code in (ecodes.REL_X, ecodes.REL_Y) and ev.value:
+                moved = True
+            elif ev.type == ecodes.EV_KEY and ev.value == 1:
+                fw['clicks'] += 1
+        if moved:
+            if now - fw['last_motion'] >= 10:
+                # The mouse may have slept or been switched off/on in between,
+                # which drops game mode's session-only settings.
+                GLib.idle_add(recheck_profile)
+            if fw['since'] is not None:
+                how = ('after a power cycle' if fw['silent'] else
+                       f'{now - fw["kicks"][-1][1]:.1f} s after "{fw["kicks"][-1][0]}"' if fw['kicks'] else 'by itself')
+                log(f'freeze over: no motion for {now - fw["since"]:.0f} s, recovered {how}')
+            fw.update(last_motion=now, clicks=0, since=None, answers=None, kicks=[], silent=False)
+        elif fw['since'] is None and fw['clicks'] >= FREEZE_CLICKS:
+            # A frozen mouse sends nothing more after the clicks, so the quiet
+            # period has to end on a timer, not on the next event.
+            GLib.timeout_add(max(0, int((fw['last_motion'] + FREEZE_QUIET - now) * 1000)) + 50, check_frozen)
+        GLib.timeout_add(100, lambda: arm(dev) and False)
+        return False
+
+    def check_frozen():
+        now = time.monotonic()
+        if (fw['since'] is None and fw['clicks'] >= FREEZE_CLICKS
+                and now - fw['last_motion'] >= FREEZE_QUIET):
+            fw['since'] = fw['last_motion']
+            log(f'freeze suspected: {fw["clicks"]} clicks but no motion for {now - fw["since"]:.0f} s '
+                f'(polling {st["hz"]} Hz, battery {st["pct"]}%)')
+            frozen_tick()
+            GLib.timeout_add_seconds(NUDGE_EVERY, frozen_tick)
+        return False
+
+    def arm(dev):
+        if fw['devs'].get(dev.fd) is dev:
+            GLib.io_add_watch(dev.fd, GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR, on_pointer)
+
+    def watch_pointers():
+        """Watch each receiver's pointer node (dongle, dock); rescanned every 30 s for replugs."""
+        known = {d.path for d in fw['devs'].values()}
+        for path in evdev.list_devices():
+            if path in known:
+                continue
+            try:
+                dev = evdev.InputDevice(path)
+            except OSError:
+                continue
+            if (dev.info.vendor == 0x1532 and (dev.phys or '').endswith('input0')
+                    and ecodes.REL_X in dev.capabilities().get(ecodes.EV_REL, [])):
+                fw['devs'][dev.fd] = dev
+                arm(dev)
+                log(f'watching {path} ({dev.name}) for freezes')
+            else:
+                dev.close()
+        return True
+
+    # -- game mode --------------------------------------------------------------------
+    # Hyprland's event socket says when focus moves; a game gets GAME_PROFILE on top
+    # (session-only), anything else gets the mouse's saved settings back.
+    gm = {'applied': None, 'addr': None, 'pending': None, 'sock': None, 'buf': b''}
+
+    def hypr_dir():
+        run = os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}')
+        sig = os.environ.get('HYPRLAND_INSTANCE_SIGNATURE')
+        dirs = ([os.path.join(run, 'hypr', sig)] if sig else []) + sorted(
+            glob.glob(os.path.join(run, 'hypr', '*')), key=os.path.getmtime, reverse=True)
+        return next((d for d in dirs if os.path.exists(os.path.join(d, '.socket2.sock'))), None)
+
+    def active_window():
+        d = hypr_dir()
+        if not d:
+            return {}
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(1)
+            s.connect(os.path.join(d, '.socket.sock'))
+            s.sendall(b'j/activewindow')
+            data = b''
+            while chunk := s.recv(65536):
+                data += chunk
+        try:
+            return json.loads(data)
+        except json.JSONDecodeError:
+            return {}
+
+    def is_game(win):
+        pats = list(GAME_CLASSES)
+        try:
+            pats += [l.strip() for l in open(GAMES_FILE) if l.strip() and not l.startswith('#')]
+        except OSError:
+            pass
+        if any(re.fullmatch(p, win.get('class') or '') for p in pats):
+            return True
+        # GameMode is D-Bus-activated: only ask when it already runs, never start it.
+        if win.get('pid') and bus.name_has_owner('com.feralinteractive.GameMode'):
+            try:
+                gamemode = bus.get_object('com.feralinteractive.GameMode', '/com/feralinteractive/GameMode')
+                return win['pid'] in {int(p) for p, _ in gamemode.ListGames(
+                    dbus_interface='com.feralinteractive.GameMode')}
+            except dbus.DBusException:
+                pass
+        return False
+
+    def apply_profile(game):
+        try:
+            if not st['mouse']:
+                st['mouse'] = Mouse()
+            m = st['mouse']
+            if game:
+                m.set_poll(GAME_PROFILE['poll'], save=False)
+                m.set_smartreel(GAME_PROFILE['smartreel'], save=False)
+                m.set_scrollaccel(GAME_PROFILE['scrollaccel'], save=False)
+            else:
+                m.set_poll(m.poll(VARSTORE), save=False)
+                m.set_smartreel(m.smartreel(VARSTORE), save=False)
+                m.set_scrollaccel(m.scrollaccel(VARSTORE), save=False)
+            st['hz'] = m.poll()
+        except (Asleep, NoMouse, RuntimeError, OSError):
+            gm['applied'] = None        # asleep: recheck_profile() retries on the next motion
+            return
+        gm['applied'] = game
+        log(f'{"game" if game else "desktop"} profile, {st["hz"]} Hz')
+        tray_update()
+
+    def evaluate():
+        gm['pending'] = None
+        try:
+            win = active_window()
+        except OSError:
+            win = {}
+        st['game'] = is_game(win)
+        if st['game'] != gm['applied']:
+            apply_profile(st['game'])
+        return False
+
+    def recheck_profile():
+        try:
+            if gm['applied'] is not None and st['mouse'] and (
+                    st['mouse'].poll() == (GAME_PROFILE['poll'] if st['game'] else st['mouse'].poll(VARSTORE))):
+                return False
+        except (Asleep, RuntimeError, OSError):
+            pass
+        apply_profile(st['game'])
+        return False
+
+    def on_hypr_events(fd, cond):
+        try:
+            data = gm['sock'].recv(65536)
+        except BlockingIOError:
+            return True
+        except OSError:
+            data = b''
+        if not data:                    # Hyprland restarted or quit
+            gm['sock'].close()
+            gm['sock'] = None
+            GLib.timeout_add_seconds(5, connect_hypr)
+            return False
+        *lines, gm['buf'] = (gm['buf'] + data).split(b'\n')
+        for line in lines:
+            # activewindowv2 also fires on title changes; only a new address matters.
+            if line.startswith(b'activewindowv2>>') and line[16:] != gm['addr']:
+                gm['addr'] = line[16:]
+                if gm['pending']:
+                    GLib.source_remove(gm['pending'])
+                gm['pending'] = GLib.timeout_add(250, evaluate)     # alt-tab bursts
+        return True
+
+    def connect_hypr():
+        d = hypr_dir()
+        if not d:
+            return True                 # not up yet: the timer tries again
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            s.connect(os.path.join(d, '.socket2.sock'))
+        except OSError:
+            s.close()
+            return True
+        s.setblocking(False)
+        gm['sock'], gm['buf'] = s, b''
+        GLib.io_add_watch(s.fileno(), GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR, on_hypr_events)
+        evaluate()
+        return False
+
+    grab_keys()
+    GLib.timeout_add_seconds(30, grab_keys)
+    watch_pointers()
+    GLib.timeout_add_seconds(30, watch_pointers)
+    tick()
+    if connect_hypr():
+        GLib.timeout_add_seconds(5, connect_hypr)
+    GLib.MainLoop().run()
+
+
+if __name__ == '__main__':
+    main()

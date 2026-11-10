@@ -1,0 +1,12 @@
+#!/bin/sh
+# Preview a cursor theme live in Hyprland (not saved; a reload/relog restores
+# the configured one). Usage: cursor-try 0|1|2|3|4
+case "$1" in
+    0) t=Future-Cyan-Hyprcursor_Theme s=36 ;;  # current
+    1) t=Future-Cyan-HDR              s=36 ;;  # cyan body, no blur
+    2) t=Future-Dark-HDR              s=36 ;;  # dark body, cyan outline
+    3) t=Bibata-Modern-Classic        s=32 ;;  # black, thin white rim
+    4) t=phinger-cursors-dark         s=32 ;;  # flat dark grey
+    *) echo "usage: cursor-try 0|1|2|3|4" >&2; exit 1 ;;
+esac
+hyprctl setcursor "$t" "$s" >/dev/null && echo "cursor: $t ($s px)"

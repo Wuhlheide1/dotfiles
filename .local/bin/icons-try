@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# icons-try — pick the icon pack (dark mode). The pick sticks across wallpaper changes:
+# it is stored as theme.iconThemeDark in ~/.config/caelestia/cli.json, which Caelestia
+# writes into the qtengine config and theme-post.py hands to GTK.
+#   icons-try                 list the packs, * = current
+#   icons-try kora            switch GTK (Nautilus …) + Qt apps (live, via qtengine's watcher)
+#   icons-try kora --shell    … and restart the Caelestia shell as well
+#   icons-try toggle          Ars-Frost <-> Rowaita (SUPER+I)
+#   icons-try reset           back to Caelestia-Dark (Papirus with accent folders)
+set -euo pipefail
+
+declare -A PACKS=(
+    [caelestia]=Caelestia-Dark [colloid]=Colloid-Dark [kora]=kora [reversal]=Reversal-dark
+    [rowaita]=Rowaita-Default-Dark [fairywren]=FairyWren_Dark [frost]=Frost
+    [infinity]=Infinity [ars]=Ars-Dark-Icons [bluecurve]=BluecurveRH [arsfrost]=Ars-Frost
+)
+ORDER=(caelestia arsfrost ars rowaita frost kora colloid fairywren reversal infinity bluecurve)
+TOGGLE=(arsfrost rowaita)
+CLI=~/.config/caelestia/cli.json
+QTCFG=~/.config/qtengine/config.json
+SCHEME=~/.local/state/caelestia/scheme.json
+
+current=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["theme"].get("iconThemeDark", "Caelestia-Dark"))' "$CLI")
+
+if [[ $# -eq 0 ]]; then
+    for k in "${ORDER[@]}"; do
+        mark=' '; [[ ${PACKS[$k]} == "$current" ]] && mark='*'
+        printf '%s %-10s %s\n' "$mark" "$k" "${PACKS[$k]}"
+    done
+    exit 0
+fi
+
+key=${1,,}
+case $key in
+    reset) key=caelestia ;;
+    toggle) key=${TOGGLE[0]}; [[ $current == "${PACKS[${TOGGLE[0]}]}" ]] && key=${TOGGLE[1]} ;;
+esac
+theme=${PACKS[$key]:-$1}
+found=
+for base in ~/.local/share/icons ~/.icons /usr/share/icons; do
+    [[ -f $base/$theme/index.theme ]] && found=1 && break
+done
+[[ $found ]] || { echo "icons-try: no icon theme '$theme' (run icons-try to list)" >&2; exit 1; }
+
+mode=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("mode", "dark"))' "$SCHEME" 2>/dev/null || echo dark)
+
+# Store the pick (cli.json), then apply it now if we're in dark mode.
+python3 -I - "$CLI" "$QTCFG" "$theme" "$mode" <<'EOF'
+import json, os, sys
+cli, qt, theme, mode = sys.argv[1:5]
+
+def update(path, section, key, value):
+    cfg = json.load(open(path))
+    cfg.setdefault(section, {})[key] = value
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(cfg, f, indent=4)
+        f.write("\n")
+    os.replace(tmp, path)
+
+update(cli, "theme", "iconThemeDark", theme)
+if mode == "dark" and os.path.exists(qt):
+    update(qt, "theme", "iconTheme", theme)
+EOF
+if [[ $mode == dark ]]; then
+    gsettings set org.gnome.desktop.interface icon-theme "$theme"
+    echo "icon theme: $theme"
+else
+    echo "icon theme: $theme (stored; applies when you're back in dark mode)"
+fi
+
+if [[ ${2:-} == --shell ]]; then
+    pkill -f '^qs -c caelestia' || true
+    setsid -f caelestia shell -d >/dev/null 2>&1
+    echo "Caelestia shell restarted"
+fi

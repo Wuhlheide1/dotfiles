@@ -1,0 +1,31 @@
+#!/bin/sh
+# In kitty, sudo asks for the password with the lock screen's Material shapes, see
+# ~/.config/rice/sudo-shapes. Everywhere else this is plain sudo. Delete this file to undo.
+askpass=$HOME/.config/rice/sudo-shapes/askpass
+
+if [ "$TERM" != xterm-kitty ] || [ ! -x "$askpass" ] || ! { true </dev/tty; } 2>/dev/null; then
+    exec /usr/bin/sudo "$@"
+fi
+
+# -S reads the password from stdin and can't be combined with -A, so those calls stay plain.
+# Only sudo's own options count: the scan stops at the command, or `sudo pacman -Syu` would look like -S.
+skip=
+for arg; do
+    if [ -n "$skip" ]; then
+        skip=
+        continue
+    fi
+    case $arg in
+    --stdin | --askpass) exec /usr/bin/sudo "$@" ;;
+    --) break ;;
+    --auth-type | --chdir | --chroot | --class | --close-from | --command-timeout | --group | --host | --other-user | --prompt | --role | --type | --user) skip=1 ;;
+    --*) ;;
+    -[aCcDghpRrTtUu]) skip=1 ;;
+    -*[SA]*) exec /usr/bin/sudo "$@" ;;
+    -*) ;;
+    *) break ;;
+    esac
+done
+
+export SUDO_ASKPASS="$askpass"
+exec /usr/bin/sudo -A "$@"

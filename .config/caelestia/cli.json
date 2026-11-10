@@ -4,7 +4,7 @@
         "postHook": "python3 ~/.config/caelestia/hooks/theme-post.py",
         "enableGtk": false,
         "enableTerm": false,
-        "iconThemeDark": "Caelestia-Dark",
+        "iconThemeDark": "Rowaita-Default-Dark",
         "iconThemeLight": "Caelestia-Light",
         "enableChromium": false
     }

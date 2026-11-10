@@ -91,7 +91,7 @@ end)
 hl.bind("ALT + TAB",         hl.dsp.window.cycle_next(),                { repeating = true }) -- next window in group
 hl.bind("SHIFT + ALT + TAB", hl.dsp.window.cycle_next({ next = false }), { repeating = true }) -- previous window in group
 hl.bind(mainMod .. " + Comma",         hl.dsp.group.toggle())      -- group / ungroup
-hl.bind(mainMod .. " + SHIFT + Comma", hl.dsp.group.lock_active()) -- lock the group (stop it swallowing windows)
+hl.bind(mainMod .. " + SHIFT + Comma", hl.dsp.group.lock())        -- lock the group (stop it swallowing windows)
 hl.bind(mainMod .. " + U", hl.dsp.window.move({ out_of_group = true })) -- pull window out of its group
 
 --------------------
@@ -106,8 +106,17 @@ for i = 1, 6 do
 end
 
 -- Scratchpad. Named "special" rather than "magic" so Caelestia's bar shows it
--- with its star icon instead of a generic dot.
-hl.bind(mainMod .. " + S",         hl.dsp.workspace.toggle_special("special"))
+-- with its star icon instead of a generic dot. A kitty waits in it: opening the
+-- scratchpad starts one there when there is none (class scratch-kitty); other
+-- windows you put there stay as they are.
+hl.bind(mainMod .. " + S", function()
+    local sp = hl.get_workspace("special:special")
+    local opening = not (sp and sp.visible)
+    hl.dispatch(hl.dsp.workspace.toggle_special("special"))
+    if opening and #hl.get_windows({ class = "scratch-kitty" }) == 0 then
+        hl.exec_cmd("kitty --class scratch-kitty", { workspace = "special:special" })
+    end
+end)
 hl.bind(mainMod .. " + SHIFT + S", hl.dsp.window.move({ workspace = "special:special" }))
 
 -- Scroll through existing workspaces with mainMod + scroll
@@ -122,7 +131,14 @@ hl.bind(mainMod .. " + A", shell("utilities")) -- quick toggles / control centre
 hl.bind(mainMod .. " + D", shell("dashboard")) -- dashboard
 hl.bind(mainMod .. " + N", shell("sidebar"))   -- notifications & sidebar
 hl.bind(mainMod .. " + K", shell("showall"))   -- show every panel at once
-hl.bind(mainMod .. " + L", shell("lock"))      -- lock screen
+-- lock screen; also locks the vault (~/.local/bin/vault, does nothing when it's closed)
+hl.bind(mainMod .. " + L", function()
+    hl.dispatch(shell("lock"))
+    hl.exec_cmd("~/.local/bin/vault lock --quiet")
+end)
+-- Emergency, also on the lock screen: if the lock screen died and shell-guard did
+-- not bring it back ("go to a TTY" screen), restart the shell and lock again.
+hl.bind(mainMod .. " + ALT + L", hl.dsp.exec_cmd("~/.config/caelestia/scripts/restore-lock.sh"), { locked = true })
 
 -- Caelestia extras on keys that were free before
 hl.bind("CTRL + ALT + Delete", shell("session"))    -- session menu (log out / reboot / …)
@@ -133,6 +149,11 @@ hl.bind(mainMod .. " + SHIFT + L", hl.dsp.exec_cmd("systemctl suspend"), { locke
 -- that the old wallpaper-shuffle.timer used to do. Changing the wallpaper
 -- re-themes the whole shell (Caelestia generates the scheme from the image).
 hl.bind(mainMod .. " + SHIFT + W", hl.dsp.exec_cmd("caelestia wallpaper -r -N")) -- random wallpaper
+-- The picker has no IPC of its own, so this opens the launcher and types ">wallpaper ".
+hl.bind(mainMod .. " + W", hl.dsp.exec_cmd("~/.local/bin/wallpaper-picker"))         -- wallpaper picker
+-- Icon pack: flip between Ars-Frost and Rowaita. The pick sticks across wallpaper
+-- changes (cli.json iconThemeDark); `icons-try` lists and switches the others.
+hl.bind(mainMod .. " + I", hl.dsp.exec_cmd("~/.local/bin/icons-try toggle"))         -- icon pack toggle
 
 -- Timers. Caelestia has no timer of its own, so these use systemd transient
 -- timers for the timekeeping (accurate, survive a shell restart, listable with
@@ -167,6 +188,9 @@ hl.bind(mainMod .. " + SHIFT + C", hl.dsp.exec_cmd("hyprpicker -a")) -- colour p
 -- tap something, then ask Claude, Google Lens it, pull its text or translate.
 -- A second press closes it.
 hl.bind(mainMod .. " + G", hl.dsp.exec_cmd("qs -c circle ipc call circle toggle"))
+
+-- Spotify lyrics floating over games (~/.config/quickshell/lyrics): hide / show.
+hl.bind(mainMod .. " + Y", hl.dsp.exec_cmd("qs -c lyrics ipc call lyrics toggle"))
 
 -----------------------------
 ---- MEDIA & HARDWARE KEYS --

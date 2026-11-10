@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+"""SUPER+W: open Caelestia's launcher straight in wallpaper-picker mode.
+
+The shell has no IPC for that mode (it is just the search text ">wallpaper "),
+so this opens the launcher and types the prefix through a throwaway uinput
+keyboard. uinput rather than wtype: wtype's virtual keyboard brings its own
+unnamed keymap, which Caelestia announces as "Keyboard layout changed: error";
+a uinput device uses the normal Japanese keymap, so nothing changes.
+
+Hyprland matches binds against the modifiers of ALL keyboards, so typing while
+SUPER is still held from the SUPER+W press fires SUPER+L (lock), SUPER+W (this
+script again), SUPER+A … — that locked the session on 2026-10-18. Hence the
+guards: wait until no modifier is physically down, type only into an open
+launcher on an unlocked session, one instance at a time.
+"""
+import fcntl
+import json
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+from evdev import InputDevice, UInput, list_devices
+from evdev import ecodes as e
+
+PREFIX = ">wallpaper "
+MODIFIERS = {e.KEY_LEFTMETA, e.KEY_RIGHTMETA, e.KEY_LEFTALT, e.KEY_RIGHTALT,
+             e.KEY_LEFTCTRL, e.KEY_RIGHTCTRL, e.KEY_LEFTSHIFT, e.KEY_RIGHTSHIFT}
+RELEASE_TIMEOUT = 3.0
+
+
+def ipc(*args: str) -> str:
+    return subprocess.run(["qs", "-c", "caelestia", "ipc", "call", *args],
+                          capture_output=True, text=True).stdout.strip()
+
+
+def launcher_disabled_here() -> bool:
+    """The Acer has the launcher switched off; SUPER+space does nothing there either."""
+    out = subprocess.run(["hyprctl", "monitors", "-j"], capture_output=True, text=True).stdout
+    mon = next((m["name"] for m in json.loads(out) if m["focused"]), "")
+    cfg = Path.home() / ".config/caelestia/monitors" / mon / "shell.json"
+    try:
+        return json.loads(cfg.read_text()).get("launcher", {}).get("enabled", True) is False
+    except (OSError, ValueError):
+        return False
+
+
+def keyboards() -> list[InputDevice]:
+    """Every input device that can send a modifier (opened before our own exists)."""
+    devices = []
+    for path in list_devices():
+        try:
+            dev = InputDevice(path)
+        except OSError:
+            continue
+        if MODIFIERS & set(dev.capabilities().get(e.EV_KEY, [])):
+            devices.append(dev)
+        else:
+            dev.close()
+    return devices
+
+
+def held_modifiers(dev: InputDevice) -> set[int]:
+    try:
+        return MODIFIERS & set(dev.active_keys())
+    # Unplugged / Bluetooth dropped mid-run: nothing held there. python-evdev
+    # raises SystemError (not OSError) when the device node is already gone.
+    except (OSError, SystemError):
+        return set()
+
+
+def modifiers_released(devices: list[InputDevice], timeout: float) -> bool:
+    """Poll until no modifier is held on any keyboard; False if that never happens."""
+    deadline = time.monotonic() + timeout
+    while True:
+        if not any(held_modifiers(d) for d in devices):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.02)
+
+
+def safe_to_type() -> bool:
+    return ipc("lock", "isLocked") == "false" and ipc("drawers", "isOpen", "launcher") == "1"
+
+
+def keys_for(ch: str) -> tuple[int, bool]:
+    if ch == ">":
+        return e.KEY_DOT, True  # Shift+. is ">" on JIS too
+    if ch == " ":
+        return e.KEY_SPACE, False
+    return getattr(e, f"KEY_{ch.upper()}"), False
+
+
+def main() -> None:
+    lock = open(os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "wallpaper-picker.lock"), "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return  # another press is still being handled
+
+    if launcher_disabled_here() or ipc("lock", "isLocked") != "false":
+        return
+    if ipc("drawers", "isOpen", "launcher") == "1":
+        ipc("drawers", "toggle", "launcher")
+        return
+    devices = keyboards()
+    if not modifiers_released(devices, RELEASE_TIMEOUT):
+        return  # SUPER held for 3 s: give up rather than type into a chord
+
+    # Create the device first: the compositor needs a moment to pick it up,
+    # and the launcher's open animation covers that time.
+    codes = {keys_for(c)[0] for c in PREFIX} | {e.KEY_LEFTSHIFT}
+    with UInput({e.EV_KEY: sorted(codes)}, name="wallpaper-picker") as ui:
+        ipc("drawers", "toggle", "launcher")
+        time.sleep(0.25)
+        # The shell refuses the launcher over fullscreen windows; never type into an app.
+        if not safe_to_type():
+            return
+        # Latin input in the launcher, not kana, whatever fcitx5 was last doing there.
+        subprocess.run(["fcitx5-remote", "-c"], capture_output=True)
+
+        for ch in PREFIX:
+            # Re-check before every key: a modifier pressed mid-way would turn
+            # the next letter into a shortcut.
+            if not modifiers_released(devices, 0.5):
+                return
+            code, shift = keys_for(ch)
+            if shift:
+                ui.write(e.EV_KEY, e.KEY_LEFTSHIFT, 1)
+            ui.write(e.EV_KEY, code, 1)
+            ui.write(e.EV_KEY, code, 0)
+            if shift:
+                ui.write(e.EV_KEY, e.KEY_LEFTSHIFT, 0)
+            ui.syn()
+            time.sleep(0.005)
+        time.sleep(0.05)  # let the last events drain before the device disappears
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,51 @@
+#!/bin/bash
+# Claude Desktop with the Caelestia theme (~/.config/rice/claude-desktop).
+#
+# Always detaches from the terminal it was started from. The app runs an
+# interactive `bash -l -i` to read the login environment; with the terminal as
+# its stdin that bash grabs the tty, so `claude-desktop &` got the whole app
+# stopped (SIGTTOU) and a foreground run died with the terminal.
+#
+# Runs the themed copy that build.py keeps in sync with the package; if that
+# fails, the stock app starts instead (unthemed). Flags as in the stock
+# launcher: Wayland when available, extra ones from claude-desktop-flags.conf.
+# Electron's own output: ~/.local/state/claude-desktop/launcher.log
+set -u
+
+state=${XDG_STATE_HOME:-$HOME/.local/state}/claude-desktop
+mkdir -p "$state"
+if [[ -z ${CAELESTIA_CLAUDE_DETACHED:-} ]]; then
+  CAELESTIA_CLAUDE_DETACHED=1 setsid -f "$0" "$@" </dev/null >"$state/launcher.log" 2>&1
+  exit 0
+fi
+unset CAELESTIA_CLAUDE_DETACHED
+# theme development only: the page-inspection hook in inject.js, while this dir exists
+[[ -d $state/debug ]] && export CAELESTIA_CLAUDE_DEBUG=$state/debug
+
+exe=/usr/lib/claude-desktop/claude-desktop
+if python3 -I "$HOME/.config/rice/claude-desktop/build.py"; then
+  exe=$HOME/.local/lib/claude-desktop-caelestia/claude-desktop
+fi
+
+flags=()
+conf="${XDG_CONFIG_HOME:-$HOME/.config}/claude-desktop-flags.conf"
+if [[ -r $conf ]]; then
+  while IFS= read -r line || [[ -n $line ]]; do
+    line="${line%%#*}"
+    [[ -n ${line//[[:space:]]/} ]] || continue
+    read -r -a words <<<"$line"
+    flags+=("${words[@]}")
+  done <"$conf"
+fi
+
+platform=()
+if [[ -n ${WAYLAND_DISPLAY:-} || ${XDG_SESSION_TYPE:-} == wayland ]]; then
+  platform=(--ozone-platform=wayland)
+  for f in "${flags[@]}" "$@"; do
+    case $f in
+      --ozone-platform=* | --ozone-platform-hint=*) platform=() ;;
+    esac
+  done
+fi
+
+exec "$exe" "${platform[@]}" "${flags[@]}" "$@"

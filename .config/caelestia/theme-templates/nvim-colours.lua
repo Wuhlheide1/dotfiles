@@ -5,10 +5,10 @@ return {
   mode = "{{ mode }}",
 
   bg = "#{{ surface.hex }}",
-  bg_low = "#{{ surfaceContainerLow.hex }}",
+  bg_low = "#{{ raisedLow.hex }}",
   bg_mid = "#{{ surfaceContainer.hex }}",
-  bg_high = "#{{ surfaceContainerHigh.hex }}",
-  bg_highest = "#{{ surfaceContainerHighest.hex }}",
+  bg_high = "#{{ raisedHigh.hex }}",
+  bg_highest = "#{{ raisedHighest.hex }}",
   fg = "#{{ onSurface.hex }}",
   fg_dim = "#{{ onSurfaceVariant.hex }}",
   outline = "#{{ outline.hex }}",

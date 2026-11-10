@@ -1,0 +1,318 @@
+#!/usr/bin/env python3
+"""buds-tray: Galaxy Buds battery in the Caelestia tray.
+
+Galaxy Buds Client has its own tray icon, but it publishes its name
+("Galaxy Buds") as the StatusNotifierItem Status instead of Active/Passive.
+Quickshell rejects that, keeps the item Passive, and Caelestia never shows
+passive items, so the app's icon stays invisible. This draws a separate one.
+
+Levels come from the app's own D-Bus interface (left, right, case). When the
+app isn't connected to the Buds, BlueZ's single battery value is used instead.
+The icon only shows while the Buds are connected. Clicking it opens the app.
+
+buds-tray.service runs this.
+"""
+import json, os, subprocess, sys
+
+APP = 'me.timschneeberger.GalaxyBudsClient'
+APP_PATH = '/me/timschneeberger/galaxybudsclient'
+SETTINGS = os.path.expanduser('~/.local/share/GalaxyBudsClient/settings.json')
+POLL_S = 60     # safety net; the app and BlueZ both signal changes
+
+
+def render_icon(pct, size):
+    """A stem earbud whose stem fills from the bottom with the charge.
+
+    Built like the mouse icon in ~/.local/bin/razer (same stroke and inset),
+    so the two match side by side in the tray. White with alpha only:
+    Caelestia recolours tray icons to the scheme.
+    """
+    from PIL import Image, ImageChops, ImageDraw
+    S = size * 4
+    st = 0.075 * S
+    gap = st * 1.9
+    w, h, r = 0.46 * S, 0.84 * S, 0.18 * S
+    x0 = (S - w - r * 1.15) / 2 + r * 1.15
+    y0 = (S - h) / 2
+    x1, y1 = x0 + w, y0 + h
+    stem = Image.new('L', (S, S), 0)
+    ImageDraw.Draw(stem).rounded_rectangle((x0, y0, x1, y1), radius=w / 2, fill=255)
+    outline = Image.new('L', (S, S), 0)
+    ImageDraw.Draw(outline).rounded_rectangle((x0, y0, x1, y1), radius=w / 2, outline=255, width=round(st))
+    # the ear tip: a ring on the side near the top, tucked behind the stem
+    cx, cy = x0 - r * 0.15, y0 + 0.25 * h + r * 0.3
+    tip = Image.new('L', (S, S), 0)
+    ImageDraw.Draw(tip).ellipse((cx - r, cy - r, cx + r, cy + r), outline=255, width=round(st))
+    tip = ImageChops.subtract(tip, stem)
+    inner = Image.new('L', (S, S), 0)
+    ImageDraw.Draw(inner).rounded_rectangle((x0 + gap, y0 + gap, x1 - gap, y1 - gap), radius=w / 2 - gap, fill=255)
+    level = Image.new('L', (S, S), 0)
+    ImageDraw.Draw(level).rectangle((0, y0 + gap + (1 - pct / 100) * (h - 2 * gap), S, S), fill=255)
+    base = ImageChops.lighter(ImageChops.lighter(outline, tip), ImageChops.multiply(inner, level))
+    alpha = base.resize((size, size), Image.LANCZOS)
+    # StatusNotifierItem pixmaps are ARGB32 in network byte order.
+    return bytes(v for a in alpha.tobytes() for v in (a, 255, 255, 255))
+
+
+def main():
+    import dbus, dbus.service
+    from dbus.mainloop.glib import DBusGMainLoop
+    from gi.repository import GLib
+
+    DBusGMainLoop(set_as_default=True)
+    bus, sysbus = dbus.SessionBus(), dbus.SystemBus()
+    log = lambda msg: print(msg, file=sys.stderr, flush=True)
+    SNI, MENU, PROPS = 'org.kde.StatusNotifierItem', 'com.canonical.dbusmenu', 'org.freedesktop.DBus.Properties'
+    OM = 'org.freedesktop.DBus.ObjectManager'
+
+    try:
+        with open(SETTINGS) as f:
+            mac = json.load(f).get('LastDeviceMac', '')
+    except (OSError, ValueError):
+        mac = ''
+    st = {'mac': mac.upper(), 'name': 'Galaxy Buds', 'left': 0, 'right': 0, 'case': 0,
+          'dev': None, 'connected': False, 'bluez_pct': None}
+
+    # -- where the numbers come from ------------------------------------------------
+    def read_app():
+        try:
+            p = bus.get_object(APP, APP_PATH + '/device', introspect=False).GetAll(
+                APP + '.Device', dbus_interface=PROPS)
+        except dbus.DBusException:
+            st['left'] = st['right'] = st['case'] = 0
+            return
+        st['left'], st['right'], st['case'] = (int(p.get(k, 0)) for k in ('BatteryLeft', 'BatteryRight', 'BatteryCase'))
+        st['name'] = str(p.get('Name') or st['name'])
+        if p.get('Address'):
+            st['mac'] = str(p['Address']).upper()
+
+    def read_bluez():
+        st['dev'], st['connected'], st['bluez_pct'] = None, False, None
+        try:
+            objs = dbus.Interface(sysbus.get_object('org.bluez', '/', introspect=False), OM).GetManagedObjects()
+        except dbus.DBusException:
+            return
+        for path, ifaces in objs.items():
+            dev = ifaces.get('org.bluez.Device1')
+            if dev and str(dev.get('Address', '')).upper() == st['mac']:
+                st['dev'], st['connected'] = str(path), bool(dev.get('Connected'))
+                pct = ifaces.get('org.bluez.Battery1', {}).get('Percentage')
+                st['bluez_pct'] = int(pct) if pct is not None else None
+                return
+
+    def levels():
+        """(icon %, left, right, case), or None when there is nothing to show."""
+        if not st['connected']:
+            return None
+        buds = [v for v in (st['left'], st['right']) if v > 0]
+        if buds:
+            return min(buds), st['left'], st['right'], st['case']
+        if st['bluez_pct'] is not None:
+            return st['bluez_pct'], 0, 0, 0
+        return None
+
+    def status():
+        # Passive = Caelestia hides the icon: Buds not connected.
+        return 'Active' if levels() else 'Passive'
+
+    def menu_lines():
+        lv = levels()
+        if lv is None:
+            return ['Not connected', '']
+        pct, left, right, case = lv
+        if not (left or right):
+            return [f'Battery {pct}%', '']
+        first = ' · '.join(f'{n} {v}%' for n, v in (('Left', left), ('Right', right)) if v > 0)
+        return [first, f'Case {case}%' if case > 0 else '']
+
+    # -- StatusNotifierItem + its menu (Caelestia shows the menu on hover) ----
+    no_pix = dbus.Array([], signature='(iiay)')
+    pix_cache = {}
+
+    def pixmaps():
+        key = levels()[0] if levels() else 0
+        if key not in pix_cache:
+            pix_cache.clear()
+            pix_cache[key] = dbus.Array([dbus.Struct((dbus.Int32(s), dbus.Int32(s), dbus.ByteArray(render_icon(key, s))))
+                                         for s in (32, 64)], signature='(iiay)')
+        return pix_cache[key]
+
+    def open_app():
+        try:
+            bus.get_object(APP, APP_PATH, introspect=False).Activate(dbus_interface=APP + '.Application')
+        except dbus.DBusException:
+            # Not running: start it in its own unit, so restarting this service
+            # doesn't take the app down with it.
+            subprocess.Popen(['systemd-run', '--user', '--collect', '--quiet', 'galaxybudsclient'],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    class Item(dbus.service.Object):
+        def props(self):
+            return {
+                'Category': 'Hardware', 'Id': 'galaxy-buds-battery', 'Title': st['name'], 'Status': status(),
+                'IconName': '', 'IconPixmap': pixmaps(), 'IconThemePath': '',
+                'OverlayIconName': '', 'OverlayIconPixmap': no_pix,
+                'AttentionIconName': '', 'AttentionIconPixmap': no_pix, 'AttentionMovieName': '',
+                'ToolTip': dbus.Struct(('', no_pix, st['name'], menu_lines()[0]), signature='sa(iiay)ss'),
+                'ItemIsMenu': False, 'Menu': dbus.ObjectPath('/MenuBar'), 'WindowId': dbus.Int32(0),
+            }
+
+        @dbus.service.method(PROPS, in_signature='ss', out_signature='v')
+        def Get(self, iface, name):
+            return self.props()[name]
+
+        @dbus.service.method(PROPS, in_signature='s', out_signature='a{sv}')
+        def GetAll(self, iface):
+            return dbus.Dictionary(self.props(), signature='sv') if iface == SNI else {}
+
+        @dbus.service.method(SNI, in_signature='ii')
+        def Activate(self, x, y):
+            open_app()
+
+        @dbus.service.method(SNI, in_signature='ii')
+        def SecondaryActivate(self, x, y):
+            pass
+
+        @dbus.service.method(SNI, in_signature='ii')
+        def ContextMenu(self, x, y):
+            pass
+
+        @dbus.service.method(SNI, in_signature='is')
+        def Scroll(self, delta, orientation):
+            pass
+
+        @dbus.service.signal(SNI)
+        def NewIcon(self):
+            pass
+
+        @dbus.service.signal(SNI, signature='s')
+        def NewStatus(self, status):
+            pass
+
+        @dbus.service.signal(SNI)
+        def NewToolTip(self):
+            pass
+
+        @dbus.service.signal(SNI)
+        def NewTitle(self):
+            pass
+
+    class Menu(dbus.service.Object):
+        revision = 1
+
+        def node(self, i, text):
+            # First line reads as the headline; the second is muted (disabled).
+            return dbus.Struct((dbus.Int32(i), dbus.Dictionary({'label': text, 'enabled': i == 1}, signature='sv'),
+                                dbus.Array([], signature='v')), signature='ia{sv}av')
+
+        def layout(self):
+            kids = [self.node(i, t) for i, t in enumerate(menu_lines(), 1) if t]
+            return dbus.Struct((dbus.Int32(0), dbus.Dictionary({'children-display': 'submenu'}, signature='sv'),
+                                dbus.Array(kids, signature='v')), signature='ia{sv}av')
+
+        @dbus.service.method(MENU, in_signature='iias', out_signature='u(ia{sv}av)')
+        def GetLayout(self, parent, depth, names):
+            return dbus.UInt32(self.revision), self.layout()
+
+        @dbus.service.method(MENU, in_signature='aias', out_signature='a(ia{sv})')
+        def GetGroupProperties(self, ids, names):
+            nodes = self.layout()[2]
+            return dbus.Array([dbus.Struct((n[0], n[1]), signature='ia{sv}') for n in nodes if not ids or n[0] in ids],
+                              signature='(ia{sv})')
+
+        @dbus.service.method(MENU, in_signature='is', out_signature='v')
+        def GetProperty(self, i, name):
+            for n in self.layout()[2]:
+                if n[0] == i:
+                    return n[1].get(name, '')
+            return ''
+
+        @dbus.service.method(MENU, in_signature='isvu')
+        def Event(self, i, event, data, ts):
+            if event == 'clicked':
+                open_app()
+
+        @dbus.service.method(MENU, in_signature='a(isvu)', out_signature='ai')
+        def EventGroup(self, events):
+            for i, event, data, ts in events:
+                self.Event(i, event, data, ts)
+            return dbus.Array([], signature='i')
+
+        @dbus.service.method(MENU, in_signature='i', out_signature='b')
+        def AboutToShow(self, i):
+            return refresh()
+
+        @dbus.service.method(MENU, in_signature='ai', out_signature='aiai')
+        def AboutToShowGroup(self, ids):
+            refresh()
+            return dbus.Array([], signature='i'), dbus.Array([], signature='i')
+
+        @dbus.service.method(PROPS, in_signature='ss', out_signature='v')
+        def Get(self, iface, name):
+            return self.GetAll(iface)[name]
+
+        @dbus.service.method(PROPS, in_signature='s', out_signature='a{sv}')
+        def GetAll(self, iface):
+            return dbus.Dictionary({'Version': dbus.UInt32(3), 'TextDirection': 'ltr', 'Status': 'normal',
+                                    'IconThemePath': dbus.Array([], signature='s')}, signature='sv')
+
+        @dbus.service.signal(MENU, signature='ui')
+        def LayoutUpdated(self, revision, parent):
+            pass
+
+    name = f'org.kde.StatusNotifierItem-{os.getpid()}-1'
+    bus_name = dbus.service.BusName(name, bus)
+    item, menu = Item(bus, '/StatusNotifierItem'), Menu(bus, '/MenuBar')
+
+    # -- keeping it current -------------------------------------------------------
+    shown = {'snap': None}
+
+    def refresh(*_):
+        """Re-read both sources; returns True if anything the tray shows changed."""
+        read_app()
+        read_bluez()
+        snap = (levels(), menu_lines(), st['name'])
+        if snap == shown['snap']:
+            return False
+        shown['snap'] = snap
+        item.NewIcon()
+        item.NewTitle()
+        item.NewToolTip()
+        item.NewStatus(status())
+        menu.revision += 1
+        menu.LayoutUpdated(dbus.UInt32(menu.revision), dbus.Int32(0))
+        return True
+
+    def on_bluez_props(iface, changed, invalidated, path=None):
+        if path == st['dev'] or (st['dev'] is None and path and path.startswith('/org/bluez/')
+                                 and iface == 'org.bluez.Device1' and 'Connected' in changed):
+            refresh()
+
+    def on_bluez_ifaces(path, *_):
+        if path == st['dev'] or st['dev'] is None:
+            refresh()
+
+    def register(owner):
+        # The watcher lives in the Caelestia shell; register again whenever it
+        # (re)appears, e.g. after `caelestia shell -r`.
+        if owner:
+            try:
+                bus.get_object('org.kde.StatusNotifierWatcher', '/StatusNotifierWatcher').RegisterStatusNotifierItem(
+                    name, dbus_interface='org.kde.StatusNotifierWatcher')
+            except dbus.DBusException as e:
+                log(f'tray registration failed: {e}')
+
+    bus.add_signal_receiver(refresh, 'PropertiesChanged', PROPS, APP, APP_PATH + '/device')
+    bus.watch_name_owner(APP, refresh)
+    sysbus.add_signal_receiver(on_bluez_props, 'PropertiesChanged', PROPS, 'org.bluez', path_keyword='path')
+    sysbus.add_signal_receiver(on_bluez_ifaces, 'InterfacesAdded', OM, 'org.bluez')
+    sysbus.add_signal_receiver(on_bluez_ifaces, 'InterfacesRemoved', OM, 'org.bluez')
+    sysbus.watch_name_owner('org.bluez', refresh)
+    bus.watch_name_owner('org.kde.StatusNotifierWatcher', register)
+    GLib.timeout_add_seconds(POLL_S, lambda: refresh() or True)
+    refresh()
+    GLib.MainLoop().run()
+
+
+if __name__ == '__main__':
+    main()

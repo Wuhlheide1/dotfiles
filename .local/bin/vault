@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# vault: your locked folder at ~/.vault (gocryptfs; same password as sudo).
+#
+#   cd ~/.vault  or  vault   in fish: asks with the sudo shape prompt, you land inside
+#   right-click in Nautilus  "Unlock vault" / "Lock vault" (and its sidebar entry)
+#   vault open | lock | status
+#   vault init               create it once (asks the password twice)
+#   vault forget-old PATH... after moving PATH into the vault: cut its old plain
+#                            copies out of home snapshots, restic backups, thumbnails
+#
+# It locks by itself when the screen locks (SUPER+L or the 5-minute idle lock),
+# before suspend, after 15 minutes without file access, and when nothing uses it
+# any more (you closed the terminal or Nautilus window that was in it, or cd'd
+# out). A program still holding a file open keeps that one file until it closes it.
+#
+# Encrypted files: ~/.local/share/vault (backed up and snapshotted, encrypted).
+# The open folder ~/.vault is excluded from restic; snapshots never see it.
+set -uo pipefail
+
+CIPHER=$HOME/.local/share/vault
+MNT=$HOME/.vault
+ASKPASS=$HOME/.config/rice/sudo-shapes/askpass
+PROMPT='[vault] 金庫のパスワード教えてな:'
+HELPER=$HOME/.local/lib/vault/vault-helper.py
+RUN=${XDG_RUNTIME_DIR:-/tmp}/vault
+SEEN=$RUN/seen              # something used the open vault since it was opened
+mkdir -p "$RUN"
+
+quiet=0
+for a in "$@"; do [ "$a" = --quiet ] && quiet=1; done
+say()  { [ "$quiet" = 1 ] || printf '%s\n' "$*"; }
+note() { [ "$quiet" = 1 ] || notify-send -a Vault -i "$1" "$2" "${3:-}" 2>/dev/null || true; }
+
+is_open() { mountpoint -q "$MNT"; }
+
+# Who still uses it: processes with a file or working directory inside, plus
+# Nautilus windows/tabs showing a folder inside (asked only if Nautilus runs).
+users() {
+    fuser -m "$MNT" 2>/dev/null | grep -q '[0-9]' && return 0
+    python3 -I "$HELPER" nautilus-in-vault "$MNT"
+}
+
+open_here() {  # in a terminal: ask, mount
+    is_open && { say "already open: $MNT"; return 0; }
+    [ -f "$CIPHER/gocryptfs.conf" ] || { echo "no vault yet: run  vault init"; return 1; }
+    mkdir -p "$MNT"
+    local tries=0 rc
+    while [ $tries -lt 3 ]; do
+        # The prompt draws on the terminal; gocryptfs reads the password from its stdout.
+        gocryptfs -q -i 15m -extpass "$ASKPASS" -extpass "$PROMPT" "$CIPHER" "$MNT"
+        rc=$?
+        case $rc in
+            0) rm -f "$SEEN"; say "open: $MNT"; return 0 ;;
+            12) tries=$((tries + 1)); echo "wrong password" ;;
+            *) is_open && return 0; return $rc ;;   # cancelled (Esc) or a real error
+        esac
+    done
+    return 12
+}
+
+open_gui() {  # no terminal (Nautilus, launcher): a small floating kitty asks. $1 = --show
+    is_open && return 0
+    [ -f "$CIPHER/gocryptfs.conf" ] || { note dialog-information "Vault isn't set up yet" "Run  vault init  in a terminal"; return 1; }
+    # A Nautilus window that was looking at ~/.vault keeps showing the empty
+    # folder from before the mount (it has no reload over D-Bus), so F5 goes to
+    # exactly that window afterwards (tested on Xvfb: F5 makes it list the vault).
+    local naut
+    naut=$(hyprctl activewindow -j 2>/dev/null | python3 -c '
+import json, sys
+w = json.load(sys.stdin)
+print(w["address"] if w.get("class") == "org.gnome.Nautilus" else "")' 2>/dev/null)
+    kitty --class vault-prompt --title Vault -o confirm_os_window_close=0 -o remember_window_size=no "$0" open
+    is_open || return 1
+    if [ "${1:-}" = --show ]; then
+        python3 -I "$HELPER" show "$MNT" 2>/dev/null
+        sleep 0.3
+    fi
+    [ -n "$naut" ] && hyprctl dispatch "hl.dsp.send_shortcut({ mods = \"\", key = \"F5\", window = \"address:$naut\" })" >/dev/null 2>&1
+    return 0
+}
+
+lock() {
+    is_open || { say "already locked"; return 0; }
+    cd / || return 1
+    if ! fusermount3 -u "$MNT" 2>/dev/null; then
+        # Busy: detach it now; a program holding a file keeps only that file
+        # until it closes it, nothing new can be opened.
+        fusermount3 -uz "$MNT" || { note dialog-error "Vault could not lock" "fusermount3 -u failed"; return 1; }
+    fi
+    rm -f "$SEEN"
+    python3 -I "$HELPER" scrub "$MNT" >/dev/null 2>&1
+    say "locked"
+}
+
+case "${1:-}" in
+    "" | open)
+        if [ "${2:-}" = --gui ] || ! { true </dev/tty; } 2>/dev/null; then
+            open_gui "${3:-}"
+        else
+            open_here
+        fi ;;
+    lock) lock ;;
+    toggle) if is_open; then lock; else "$0" open --gui --show; fi ;;
+    status)
+        if is_open; then
+            echo "open: $MNT"
+            fuser -vm "$MNT" 2>&1 | sed -n '2,$p'
+        else
+            echo "locked"
+        fi ;;
+    seen) is_open && touch "$SEEN" ;;
+    # Lock if nothing uses it any more, but only after something did: a vault
+    # opened from the terminal without cd'ing in is left for the idle timer.
+    check)
+        if [ "${2:-}" = --after ]; then
+            # `check --after PID`: once that (exiting) shell is gone. Own session,
+            # because the terminal that asked is closing and would take us with it.
+            setsid -f bash -c 'cd /; timeout 15 tail --pid="$1" -f /dev/null; exec "$0" check' "$0" "${3:?pid}" \
+                </dev/null >/dev/null 2>&1
+            exit 0
+        fi
+        cd / || exit 1   # a caller sitting inside must not count as a user
+        is_open || exit 0
+        if users; then touch "$SEEN"; elif [ -e "$SEEN" ]; then lock; fi ;;
+    init)
+        [ -f "$CIPHER/gocryptfs.conf" ] && { echo "already set up: $CIPHER"; exit 1; }
+        echo "Type your sudo/login password (the vault uses the same one), twice."
+        p1=$("$ASKPASS" "$PROMPT") || exit 1
+        p2=$("$ASKPASS" "[vault] もう一回:") || exit 1
+        [ "$p1" = "$p2" ] || { echo "the two didn't match, nothing created"; exit 1; }
+        mkdir -p "$CIPHER" "$MNT"
+        chmod 700 "$CIPHER" "$MNT"
+        printf '%s\n' "$p1" | gocryptfs -init -q -passfile /dev/stdin "$CIPHER" || exit 1
+        unset p1 p2
+        cat <<'EOF'
+
+The box above shows your MASTER KEY. Write it on paper and keep it away from
+this PC: it is the only way in if the password or gocryptfs.conf ever breaks.
+It is not stored anywhere else. Then:  cd ~/.vault
+EOF
+        ;;
+    forget-old) shift; exec python3 -I "$HELPER" forget-old "$MNT" "$@" ;;
+    # Claude Code is kept out of the vault (~/.claude/hooks/vault-guard.py). This lets
+    # its shell in for a while; it asks on your terminal, so Claude can't run it itself.
+    let-claude)
+        min=${2:-60}
+        [[ "$min" =~ ^[0-9]+$ ]] || { echo "usage: vault let-claude [minutes]"; exit 2; }
+        { true </dev/tty; } 2>/dev/null || { echo "needs your terminal"; exit 1; }
+        read -r -p "Let Claude Code into ~/.vault for $min minutes? [y/N] " a </dev/tty
+        [[ "$a" =~ ^[Yy] ]] || exit 1
+        mkdir -p "$HOME/.local/state/vault"
+        echo $(( $(date +%s) + min * 60 )) > "$HOME/.local/state/vault/claude-ok"
+        echo "ok until $(date -d "+$min min" +%H:%M) (Read/Edit tools stay blocked; it can use its shell)" ;;
+    watch) exec python3 -I "$HELPER" watch "$MNT" "$0" ;;
+    -h | --help | help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//' ;;
+    *) echo "unknown: $1 (vault help)"; exit 2 ;;
+esac

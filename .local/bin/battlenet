@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Battle.net (and every game it installs) under GE-Proton via umu-launcher.
+#   battlenet           start Battle.net (or raise it if running); first run installs it
+#   battlenet update    fetch the latest GE-Proton (next launch uses it)
+#   battlenet kill      stop everything running in the prefix
+#   battlenet run ARGS  run a Windows program / winecfg / winetricks VERB in the prefix
+# Prefix and games live on the NVMe games volume, outside snapper and restic.
+set -euo pipefail
+
+export WINEPREFIX=/mnt/nvme/@games/battlenet
+export GAMEID=umu-battlenet # not in umu-database (no fixes); gives windows class steam_app_battlenet
+export STORE=none
+# umu defaults to waitforexitandrun, which blocks behind a still-running
+# wineserver; "run" joins it instead, so a second launch raises Battle.net.
+export PROTON_VERB=run
+
+compat=~/.local/share/Steam/compatibilitytools.d
+launcher="$WINEPREFIX/drive_c/Program Files (x86)/Battle.net/Battle.net Launcher.exe"
+installer_url='https://downloader.battle.net/download/getInstallerForGame?os=win&gameProgram=BATTLENET_APP&version=Live'
+
+# Pin to the newest GE-Proton already installed, so a launch never waits on a
+# download; with none installed, umu fetches the latest.
+newest=$(find "$compat" -maxdepth 1 -type d -name 'GE-Proton*' -printf '%f\n' 2>/dev/null | sort -V | tail -n1 || true)
+export PROTONPATH=${newest:+$compat/$newest}
+export PROTONPATH=${PROTONPATH:-GE-Proton}
+
+mkdir -p "$WINEPREFIX"
+
+# wineserver names its socket after the prefix's device and inode
+running() {
+	local dev ino
+	read -r dev ino < <(stat -c '%d %i' "$WINEPREFIX")
+	[[ -S /tmp/.wine-$UID/server-$(printf '%x-%x' "$dev" "$ino")/socket ]]
+}
+
+case "${1:-}" in
+	update)
+		if running; then
+			echo "Battle.net is running; quit it (or: battlenet kill) before updating Proton" >&2
+			exit 1
+		fi
+		PROTONPATH=GE-Proton exec umu-run wineboot -u
+		;;
+	kill)
+		exec "$PROTONPATH/files/bin/wineserver" -k
+		;;
+	run)
+		shift
+		exec umu-run "$@"
+		;;
+	'')
+		if [[ ! -f $launcher ]]; then
+			tmp=$(mktemp -d)
+			trap 'rm -rf "$tmp"' EXIT
+			curl -fL --retry 3 -o "$tmp/Battle.net-Setup.exe" "$installer_url"
+			umu-run "$tmp/Battle.net-Setup.exe" --lang=enUS
+			exit
+		fi
+		exec umu-run "$launcher"
+		;;
+	*)
+		sed -n '2,7s/^# \{0,1\}//p' "$0"
+		exit 1
+		;;
+esac

@@ -16,7 +16,7 @@ set -U fish_color_comment {{ outline.hex }} --italics
 set -U fish_color_autosuggestion {{ outline.hex }}
 set -U fish_color_valid_path --underline
 set -U fish_color_selection --background={{ primaryContainer.hex }} {{ onPrimaryContainer.hex }}
-set -U fish_color_search_match --background={{ surfaceContainerHighest.hex }}
+set -U fish_color_search_match --background={{ raisedHighest.hex }}
 set -U fish_color_history_current --bold
 set -U fish_color_cancel {{ outline.hex }} --reverse
 set -U fish_color_cwd {{ primary.hex }}
@@ -30,8 +30,8 @@ set -U fish_pager_color_progress {{ outline.hex }}
 set -U fish_pager_color_prefix {{ primary.hex }} --bold
 set -U fish_pager_color_completion {{ onSurface.hex }}
 set -U fish_pager_color_description {{ outline.hex }}
-set -U fish_pager_color_selected_background --background={{ surfaceContainerHigh.hex }}
+set -U fish_pager_color_selected_background --background={{ raisedHigh.hex }}
 set -U fish_pager_color_selected_prefix {{ primary.hex }} --bold
 
 # fzf (Ctrl+R history, Ctrl+T files, Alt+C directories) in the same palette.
-set -Ux FZF_DEFAULT_OPTS "--height=40% --layout=reverse --border=rounded --info=inline-right --pointer=▌ --marker=▌ --color=fg:-1,bg:-1,hl:#{{ primary.hex }},fg+:#{{ onSurface.hex }},bg+:#{{ surfaceContainerHigh.hex }},hl+:#{{ primary.hex }},info:#{{ outline.hex }},prompt:#{{ primary.hex }},pointer:#{{ primary.hex }},marker:#{{ ansiGreen.hex }},spinner:#{{ tertiary.hex }},header:#{{ tertiary.hex }},border:#{{ outlineVariant.hex }},gutter:-1,query:#{{ onSurface.hex }}"
+set -Ux FZF_DEFAULT_OPTS "--height=40% --layout=reverse --border=rounded --info=inline-right --pointer=▌ --marker=▌ --color=fg:-1,bg:-1,hl:#{{ primary.hex }},fg+:#{{ onSurface.hex }},bg+:#{{ raisedHigh.hex }},hl+:#{{ primary.hex }},info:#{{ outline.hex }},prompt:#{{ primary.hex }},pointer:#{{ primary.hex }},marker:#{{ ansiGreen.hex }},spinner:#{{ tertiary.hex }},header:#{{ tertiary.hex }},border:#{{ outlineVariant.hex }},gutter:-1,query:#{{ onSurface.hex }}"

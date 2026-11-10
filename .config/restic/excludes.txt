@@ -19,3 +19,9 @@
 
 # The backup drive itself and other mounts
 /mnt
+
+# Krita AI Diffusion server (ComfyUI + venv + models, all re-downloadable; own btrfs subvolume so snapper skips it too)
+/home/wuhlheide/.local/share/krita/ai_diffusion/server
+
+# The OPEN vault (plain files). Its encrypted copy, ~/.local/share/vault, is backed up.
+/home/wuhlheide/.vault
